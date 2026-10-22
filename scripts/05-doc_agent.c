@@ -13,12 +13,15 @@
 #include <linux/landlock.h>
 #include <linux/seccomp.h>
 #include <linux/filter.h>
+#include "05-seccomp-deny.h"
 
 #define CTL 3
 static int ctl = CTL;
 
 static void report(const char *line) {
     char buf[1024]; int n = snprintf(buf, sizeof buf, "%s\n", line);
+    if (n < 0) return;                                   /* F1: snprintf returns the would-be */
+    if (n >= (int)sizeof buf) n = (int)sizeof buf - 1;   /* length; never write past buf */
     write(ctl, buf, n);
     char ack[8]; int got = 0;
     while (got < 3) { int r = read(ctl, ack + got, sizeof ack - got); if (r <= 0) break; got += r; if (memcmp(ack, "OK\n", 3) == 0) break; }
@@ -47,16 +50,10 @@ static void landlock_write_only(const char *dir) {
     close(rs);
 }
 
+/* execve trapped (SIGSYS -> on_sigsys reports EACCES); additionally denies
+   socket(AF_UNIX) and io_uring_* per review F2/F9. See 05-seccomp-deny.h. */
 static void seccomp_trap_exec(void) {
-    struct sock_filter f[] = {
-        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, offsetof(struct seccomp_data, nr)),
-        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_execve, 0, 1),
-        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_TRAP),
-        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
-    };
-    struct sock_fprog p = { .len = 4, .filter = f };
-    prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0);
-    prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &p);
+    install_agent_seccomp(1);
 }
 
 static void try_write(const char *path) {

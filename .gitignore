@@ -17,3 +17,5 @@ kernel/*.bin.bak
 *.swp
 scripts/__pycache__/
 **/__pycache__/
+baseline-default.log
+baseline-kill.log

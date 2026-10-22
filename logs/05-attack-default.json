@@ -1,80 +1,80 @@
 {
   "agents": [],
   "events": [],
-  "exported_at": 1792629907,
-  "exported_at_utc": "2026-10-22T00:45:07Z",
+  "exported_at": 1792648997,
+  "exported_at_utc": "2026-10-22T06:03:17Z",
   "format": "monkeyitm-log/v1",
   "job_events": [],
   "run_events": [
     {
-      "at": 1792629847,
-      "at_utc": "2026-10-22T00:44:07Z",
+      "at": 1792648937,
+      "at_utc": "2026-10-22T06:02:17Z",
       "detail": "LSM capability,landlock",
       "kind": "vsock"
     },
     {
-      "at": 1792629847,
-      "at_utc": "2026-10-22T00:44:07Z",
+      "at": 1792648937,
+      "at_utc": "2026-10-22T06:02:17Z",
       "detail": "HELLO supervisor",
       "kind": "vsock"
     },
     {
-      "at": 1792629847,
-      "at_utc": "2026-10-22T00:44:07Z",
+      "at": 1792648937,
+      "at_utc": "2026-10-22T06:02:17Z",
       "detail": "HELLO shell_agent",
       "kind": "vsock"
     },
     {
-      "at": 1792629847,
-      "at_utc": "2026-10-22T00:44:07Z",
+      "at": 1792648937,
+      "at_utc": "2026-10-22T06:02:17Z",
       "detail": "HELLO doc_agent",
       "kind": "vsock"
     },
     {
-      "at": 1792629847,
-      "at_utc": "2026-10-22T00:44:07Z",
+      "at": 1792648937,
+      "at_utc": "2026-10-22T06:02:17Z",
       "detail": "TRY shell_agent execve /tmp/payload.sh",
       "kind": "vsock"
     },
     {
-      "at": 1792629847,
-      "at_utc": "2026-10-22T00:44:07Z",
+      "at": 1792648937,
+      "at_utc": "2026-10-22T06:02:17Z",
       "detail": "ALLOW doc_agent write /tmp/doc/benign.txt",
       "kind": "vsock"
     },
     {
-      "at": 1792629847,
-      "at_utc": "2026-10-22T00:44:07Z",
+      "at": 1792648937,
+      "at_utc": "2026-10-22T06:02:17Z",
       "detail": "DENY shell_agent execve /tmp/payload.sh errno=13",
       "kind": "vsock"
     },
     {
-      "at": 1792629847,
-      "at_utc": "2026-10-22T00:44:07Z",
+      "at": 1792648937,
+      "at_utc": "2026-10-22T06:02:17Z",
       "detail": "DENY doc_agent write /tmp/payload.sh errno=13",
       "kind": "vsock"
     },
     {
-      "at": 1792629847,
-      "at_utc": "2026-10-22T00:44:07Z",
+      "at": 1792648937,
+      "at_utc": "2026-10-22T06:02:17Z",
       "detail": "TRY shell_agent execve /bin/true",
       "kind": "vsock"
     },
     {
-      "at": 1792629847,
-      "at_utc": "2026-10-22T00:44:07Z",
+      "at": 1792648937,
+      "at_utc": "2026-10-22T06:02:17Z",
       "detail": "DENY doc_agent execve /tmp/payload.sh EACCES",
       "kind": "vsock"
     },
     {
-      "at": 1792629847,
-      "at_utc": "2026-10-22T00:44:07Z",
+      "at": 1792648937,
+      "at_utc": "2026-10-22T06:02:17Z",
       "detail": "DONE doc_agent",
       "kind": "vsock"
     },
     {
-      "at": 1792629847,
-      "at_utc": "2026-10-22T00:44:07Z",
+      "at": 1792648937,
+      "at_utc": "2026-10-22T06:02:17Z",
       "detail": "DONE supervisor",
       "kind": "vsock"
     }
@@ -82,7 +82,7 @@
   "summary": {
     "chain": {
       "algorithm": "sha256",
-      "head": "305a02bb416fcf233785e6bedc5e8f738e99e7b55e731f16560e1ae3a37aa3fa",
+      "head": "c55f441ac5291f257fbd4da0f95a7aee90bc0a925e4dad85ba3b3fe64031bfc7",
       "rows": 12
     },
     "final_verdicts": {

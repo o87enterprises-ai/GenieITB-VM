@@ -8,12 +8,15 @@
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <linux/landlock.h>
+#include "05-seccomp-deny.h"
 
 #define CTL 3
 static int ctl = CTL;
 
 static void report(const char *line) {
     char buf[1024]; int n = snprintf(buf, sizeof buf, "%s\n", line);
+    if (n < 0) return;                                   /* F1: snprintf returns the would-be */
+    if (n >= (int)sizeof buf) n = (int)sizeof buf - 1;   /* length; never write past buf */
     write(ctl, buf, n);
     char ack[8]; int got = 0;
     while (got < 3) { int r = read(ctl, ack + got, sizeof ack - got); if (r <= 0) break; got += r; if (memcmp(ack, "OK\n", 3) == 0) break; }
@@ -68,6 +71,10 @@ int main(void) {
         "/lib", "/lib64", "/usr/lib", "/usr/local/lib"
     };
     landlock_exec_allow(dirs, 6);
+    /* Deny socket(AF_UNIX) and io_uring_* (review F2/F9). execve is NOT
+       trapped here (trap_execve=0) so Landlock remains the EXECUTE gate and
+       the denial stays EACCES/errno=13, as the §7 checklist asserts. */
+    install_agent_seccomp(0);
     try_exec("/tmp/payload.sh");
     try_exec("/bin/true");
     report("DONE shell_agent");

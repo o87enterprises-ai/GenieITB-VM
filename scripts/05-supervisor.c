@@ -28,6 +28,20 @@ static int   denials;
 static int   tripwire = 4;
 static pid_t kids[MAX_AGENTS];
 
+/* Review F5: count denials by a positive allow-list of non-denial prefixes
+   rather than by matching "DENY" only. An agent cannot dodge the tripwire by
+   reporting a denied operation under a different prefix (e.g. "ERROR"); any
+   line that is not a known benign event counts. "TRY" is the pre-attempt
+   marker (the result arrives as a separate DENY/ALLOW line) and must NOT
+   count, or each denied exec would be tallied twice and the wire would trip
+   one denial early. */
+static int is_non_denial(const char *s) {
+    return !strncmp(s, "HELLO", 5) || !strncmp(s, "ALLOW", 5)
+        || !strncmp(s, "DONE",  4) || !strncmp(s, "LSM",   3)
+        || !strncmp(s, "TRY",   3) || !strncmp(s, "TIMEOUT", 7)
+        || !strncmp(s, "TRIPWIRE", 8) || !strncmp(s, "HALT", 4);
+}
+
 static void read_first_line(const char *path, char *buf, size_t buflen) {
     int fd = open(path, O_RDONLY);
     if (fd < 0) { snprintf(buf, buflen, "unavailable"); return; }
@@ -85,7 +99,7 @@ static void send_and_ack(const char *line) {
         w += r;
     }
 
-    char ack[16];
+    char ack[16] = {0};   /* F7: zero-init (memcmp is length-guarded, but be explicit) */
     int got = 0, ok = 0;
     for (;;) {
         if (got >= 4 && memcmp(ack, "ack\n", 4) == 0) { ok = 1; break; }
@@ -210,7 +224,7 @@ int main(int argc, char **argv) {
             while ((nl = memchr(buf[i], '\n', len[i]))) {
                 *nl = 0;
                 send_and_ack(buf[i]);
-                if (!strncmp(buf[i], "DENY", 4)) {
+                if (!is_non_denial(buf[i])) {
                     denials++;
                     if (denials >= tripwire) {
                         char tw[128];

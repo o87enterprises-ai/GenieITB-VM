@@ -2,9 +2,10 @@
 
 **Repo:** https://github.com/o87enterprises-ai/GenieITB-VM (public, Apache 2.0)
 **As of:** 2026-10-21, commit `093a17d`
-**Status:** Phase 5 SS1 (containment demo) built and re-verified. Nothing
-beyond SS1 has been built or tested. No adversarial review has been done
-by anyone yet — that's this engagement.
+**Status:** Phase 5 SS1 (containment demo) built and re-verified. An
+independent review was then performed (findings F1–F11, tests T1–T9); the
+remediation of that review is recorded in "Phase 2 remediation" at the
+bottom of this file and lives on branch `security-review/phase-2`.
 
 ## What this project is
 
@@ -120,3 +121,63 @@ they were built if you need to regenerate them.
 > demo shows.
 
 Fake secrets only; zero egress (per the project's Phase 1).
+
+---
+
+# Phase 2 remediation (branch `security-review/phase-2`)
+
+An independent review (findings F1–F11 / tests T1–T9) was supplied. Its
+cited commits (`8fdb03e`, `688782e`), branch (`security-review/phase-1`),
+and helper scripts (`write-anchor.sh`, `verify-with-anchor.sh`) did **not**
+exist in this repository — they described a workspace that was never
+committed here. So every fix below was applied fresh against the real
+tree, and each finding was re-checked against the actual source before
+acting. Two of the review's findings did not survive that check; they are
+marked below.
+
+**Both SS1 modes still PASS after every change** (`broker verify` intact,
+full §7 checklist green, tripwire fires at exactly 3 denials in kill mode).
+
+| ID | Review sev | Verdict here | What changed |
+|---|---|---|---|
+| F1 | P1 | **Fixed** | `report()` in both agents clamped `snprintf` return before `write()` (it was **not** actually fixed in this repo despite the review's "FIXED" note). Not triggerable by SS1's ≤300B lines; fixed as latent OOB-read hardening. |
+| F2 | P0 (latent) | **Fixed** | New `scripts/05-seccomp-deny.h`; both agents now deny `socket(AF_UNIX)` via seccomp. shell_agent keeps `execve` **un-trapped** so Landlock stays the EXECUTE gate and the denial remains `errno=13`. Confirmed live by T8. |
+| F3 | P2 | **Fixed** | Host vsock reader records an explicit `TRUNCATION` chain event and refuses to ack instead of committing a truncated line as whole. The guest `send_and_ack` already fails closed on a missing ack, so no agent change was needed. Genuinely latent: real lines are ≤1024B. |
+| F4 | P2 | Documented | Connection-flood bound unchanged (`listen(8)` + 1s–5s timeout). Out of scope for the 60s single-shot demo; noted for the mobile port. |
+| F5 | P2 | **Fixed (with correction)** | Tripwire now counts by a positive non-denial allowlist. **The review's proposed allowlist omitted `TRY`**, which would have counted every attempt as a denial and tripped the wire early; `TRY` is included here, and kill mode still trips at exactly 3. |
+| F6 | P3 | **Not a bug (false positive)** | `spawn()` already does `if (sv[1] != 3) close(sv[1]);` — no fd leak. No change. |
+| F7 | P3 | **Fixed** | `ack[16]` zero-initialized. |
+| F8 | P1 (def-in-depth) | **Not done** | The anchored-verify workflow and its scripts do not exist in this repo. `broker`'s `--head/--rows` anchoring is a sibling-repo capability; wiring it belongs in its own change, not bundled here. Left open. |
+| F9 | P2 | **Fixed** | Same seccomp header denies `io_uring_{setup,enter,register}`. Confirmed by T8. |
+| F10 | P2 (host) | **Documented, not wired** | Firecracker is still launched without the jailer. Wiring the jailer needs root, a chroot-base-dir, and copying kernel+rootfs into the chroot — it would destabilize the working demo and is an operational/deployment change, not a code fix. Recommended for any non-demo deployment: `jailer --id <id> --exec-file firecracker --uid <uid> --gid <gid> --chroot-base-dir <dir> --cgroup-version 2 -- --seccomp-level 2 --api-sock <sock>`. |
+| F11 | — | N/A | Review artifact only. |
+
+## New review assets in this branch
+
+- `scripts/05-seccomp-deny.h` — shared agent syscall deny-list (F2/F9).
+- `scripts/05-seccomp-probe.c` — **T8** control-validation test (not an
+  exploit): installs the shell_agent profile and asserts `socket(AF_UNIX)`
+  and `io_uring_setup` return `EACCES`, while `AF_VSOCK`/`AF_INET` are
+  allowed. Build: `gcc -O2 -Wall -Wextra -o /tmp/05-seccomp-probe scripts/05-seccomp-probe.c`.
+- `scripts/05-lineparser-fuzz.c` — **T9** AFL++ harness mirroring the guest
+  supervisor's line assembler. Build: `afl-clang-fast -O2 -fsanitize=address
+  -o /tmp/05-lineparser-fuzz scripts/05-lineparser-fuzz.c`.
+- `scripts/05-install-agents.sh` — rebuilds all three guest binaries and
+  installs them into `rootfs/05-rootfs.ext4` (needs sudo loop-mount).
+
+## Test results obtained here
+
+- **T8 (AF_UNIX / io_uring probe):** PASS — all four expectations held
+  (`AF_UNIX` EACCES, `io_uring_setup` EACCES, `AF_VSOCK`/`AF_INET` allowed).
+- **T9 (line-parser fuzz):** 55s `afl-fuzz` campaign under ASan, ~62% edge
+  coverage, **0 crashes / 0 hangs**. ASan standalone replay also clean.
+  Not exhaustive — a longer campaign is cheap and worth running.
+- **SS1 default + kill:** PASS after all changes; receipts regenerated.
+
+## Still open / not addressed here
+
+- F8 (anchored verify) and F10 (jailer) — see table.
+- T9 is a short campaign, not a soak. No soak fuzzing, no AFL on the host
+  Python path, no `broker` source review (sibling repo), no kernel/
+  Firecracker CVE review — all remain as the review's own residual-risk
+  section states.

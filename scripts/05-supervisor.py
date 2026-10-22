@@ -60,8 +60,12 @@ def run_vsock_listener(listen_path, events_path, receipt_db, ready_event, stop_e
             with conn:
                 conn.settimeout(5.0)
                 buf = b""
+                truncated = False
                 try:
-                    while b"\n" not in buf and len(buf) < 16384:
+                    while b"\n" not in buf:
+                        if len(buf) >= 16384:
+                            truncated = True
+                            break
                         chunk = conn.recv(4096)
                         if not chunk: break
                         buf += chunk
@@ -69,6 +73,20 @@ def run_vsock_listener(listen_path, events_path, receipt_db, ready_event, stop_e
                     pass
                 if not buf:
                     continue
+                if truncated and b"\n" not in buf:
+                    # F3: a line exceeding the cap with no newline must NOT be
+                    # committed as if it were a whole line — that records a lie.
+                    # Record the truncation as its own event and refuse to ack;
+                    # the guest's send_and_ack fails closed on a missing ack.
+                    marker = f"TRUNCATION vsock line exceeded 16384 bytes dropped={len(buf)}"
+                    with open(events_path, "ab") as f:
+                        f.write(marker.encode() + b"\n")
+                    try:
+                        receipt.append_run_event(receipt_db, "vsock", marker)
+                    except Exception as e:
+                        print(f"supervisor: RECEIPT WRITE FAILED on truncation: {e}",
+                              file=sys.stderr)
+                    continue  # no ack
                 line = buf.split(b"\n", 1)[0].decode("utf-8", "replace")
                 with open(events_path, "ab") as f:
                     f.write(line.encode() + b"\n")

@@ -65,9 +65,9 @@ int main(void) {
        /tmp stays outside -> /tmp/payload.sh still denied. */
     const char *dirs[] = {
         "/bin", "/usr/bin",
-        "/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/local/lib"
+        "/lib", "/lib64", "/usr/lib", "/usr/local/lib"
     };
-    landlock_exec_allow(dirs, 7);
+    landlock_exec_allow(dirs, 6);
     try_exec("/tmp/payload.sh");
     try_exec("/bin/true");
     report("DONE shell_agent");

@@ -2,11 +2,11 @@ LSM capability,landlock
 HELLO supervisor
 HELLO shell_agent
 HELLO doc_agent
-ERROR shell_agent open /usr/lib64 errno=2
-ALLOW doc_agent write /tmp/doc/benign.txt
 TRY shell_agent execve /tmp/payload.sh
-DENY doc_agent write /tmp/payload.sh errno=13
+ALLOW doc_agent write /tmp/doc/benign.txt
 DENY shell_agent execve /tmp/payload.sh errno=13
+DENY doc_agent write /tmp/payload.sh errno=13
+TRY shell_agent execve /bin/true
 DENY doc_agent execve /tmp/payload.sh EACCES
 TRIPWIRE denials>=3 killing group
 HALT supervisor

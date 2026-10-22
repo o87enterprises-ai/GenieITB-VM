@@ -1,30 +1,30 @@
 MonkeyITM-VM broker log
-exported 2026-10-22T00:31:34Z
+exported 2026-10-22T00:46:12Z
 
 intents: 0   allow: 0   deny: 0   awaiting approval: 0
 escalations: 0 allowed by a human, 0 denied by a human, 0 pending, 0 denied unattended
 
-RUN VSOCK  2026-10-22T00:30:34Z  LSM capability,landlock
+RUN VSOCK  2026-10-22T00:45:12Z  LSM capability,landlock
 
-RUN VSOCK  2026-10-22T00:30:34Z  HELLO supervisor
+RUN VSOCK  2026-10-22T00:45:12Z  HELLO supervisor
 
-RUN VSOCK  2026-10-22T00:30:34Z  HELLO shell_agent
+RUN VSOCK  2026-10-22T00:45:12Z  HELLO shell_agent
 
-RUN VSOCK  2026-10-22T00:30:34Z  HELLO doc_agent
+RUN VSOCK  2026-10-22T00:45:12Z  HELLO doc_agent
 
-RUN VSOCK  2026-10-22T00:30:34Z  ERROR shell_agent open /usr/lib64 errno=2
+RUN VSOCK  2026-10-22T00:45:12Z  TRY shell_agent execve /tmp/payload.sh
 
-RUN VSOCK  2026-10-22T00:30:34Z  ALLOW doc_agent write /tmp/doc/benign.txt
+RUN VSOCK  2026-10-22T00:45:12Z  ALLOW doc_agent write /tmp/doc/benign.txt
 
-RUN VSOCK  2026-10-22T00:30:34Z  TRY shell_agent execve /tmp/payload.sh
+RUN VSOCK  2026-10-22T00:45:12Z  DENY shell_agent execve /tmp/payload.sh errno=13
 
-RUN VSOCK  2026-10-22T00:30:34Z  DENY doc_agent write /tmp/payload.sh errno=13
+RUN VSOCK  2026-10-22T00:45:12Z  DENY doc_agent write /tmp/payload.sh errno=13
 
-RUN VSOCK  2026-10-22T00:30:34Z  DENY shell_agent execve /tmp/payload.sh errno=13
+RUN VSOCK  2026-10-22T00:45:12Z  TRY shell_agent execve /bin/true
 
-RUN VSOCK  2026-10-22T00:30:34Z  DENY doc_agent execve /tmp/payload.sh EACCES
+RUN VSOCK  2026-10-22T00:45:12Z  DENY doc_agent execve /tmp/payload.sh EACCES
 
-RUN VSOCK  2026-10-22T00:30:34Z  TRIPWIRE denials>=3 killing group
+RUN VSOCK  2026-10-22T00:45:12Z  TRIPWIRE denials>=3 killing group
 
-RUN VSOCK  2026-10-22T00:30:34Z  HALT supervisor
+RUN VSOCK  2026-10-22T00:45:12Z  HALT supervisor
 

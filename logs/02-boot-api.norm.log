@@ -1,0 +1,206 @@
+2026-10-18T16:27:32.529350879 [anonymous-instance:main] Running Firecracker v1.8.0
+2026-10-18T16:27:32.602668583 [anonymous-instance:fc_api] The API server received a Put request on "/boot-source" with body "{\"kernel_image_path\": \"/home/chellebelle/GenieITB-VM/kernel/vmlinux.bin\", \"boot_args\": \"console=ttyS0 reboot=k panic=1 pci=off i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd init=/bin/sh\"}".
+2026-10-18T16:27:32.603513987 [anonymous-instance:fc_api] The request was executed successfully. Status code: 204 No Content.
+2026-10-18T16:27:32.605213620 [anonymous-instance:fc_api] The API server received a Put request on "/drives/rootfs" with body "{\"drive_id\": \"rootfs\", \"path_on_host\": \"/home/chellebelle/GenieITB-VM/rootfs/rootfs.ext4\", \"is_root_device\": true, \"is_read_only\": true}".
+2026-10-18T16:27:32.605462098 [anonymous-instance:fc_api] The request was executed successfully. Status code: 204 No Content.
+2026-10-18T16:27:32.605889355 [anonymous-instance:fc_api] The API server received a Put request on "/machine-config" with body "{\"vcpu_count\": 1, \"mem_size_mib\": 256, \"smt\": false}".
+2026-10-18T16:27:32.606019610 [anonymous-instance:fc_api] The request was executed successfully. Status code: 204 No Content.
+2026-10-18T16:27:32.606454288 [anonymous-instance:fc_api] The API server received a Put request on "/actions" with body "{\"action_type\": \"InstanceStart\"}".
+2026-10-18T16:27:32.623155935 [anonymous-instance:main] Artificially kick devices.
+2026-10-18T16:27:32.623216269 [anonymous-instance:fc_vcpu 0] Received a VcpuEvent::Resume message with immediate_exit enabled. immediate_exit was disabled before proceeding
+2026-10-18T16:27:32.623332826 [anonymous-instance:fc_api] The request was executed successfully. Status code: 204 No Content.
+[    0.000000] Linux version 4.14.174 (@57edebb99db7) (gcc version 7.5.0 (Ubuntu 7.5.0-3ubuntu1~18.04)) #2 SMP Wed Jul 14 11:47:24 UTC 2021
+[    0.000000] Command line: console=ttyS0 reboot=k panic=1 pci=off i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd init=/bin/sh root=/dev/vda ro virtio_mmio.device=4K@0xd0000000:5
+[    0.000000] x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'
+[    0.000000] x86/fpu: Supporting XSAVE feature 0x002: 'SSE registers'
+[    0.000000] x86/fpu: Supporting XSAVE feature 0x004: 'AVX registers'
+[    0.000000] x86/fpu: xstate_offset[2]:  576, xstate_sizes[2]:  256
+[    0.000000] x86/fpu: Enabled xstate features 0x7, context size is 832 bytes, using 'compacted' format.
+[    0.000000] e820: BIOS-provided physical RAM map:
+[    0.000000] BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+[    0.000000] BIOS-e820: [mem 0x000000000009fc00-0x00000000000dffff] reserved
+[    0.000000] BIOS-e820: [mem 0x0000000000100000-0x000000000fffffff] usable
+[    0.000000] NX (Execute Disable) protection: active
+[    0.000000] DMI not present or invalid.
+[    0.000000] Hypervisor detected: KVM
+[    0.000000] tsc: Unable to calibrate against PIT
+[    0.000000] tsc: No reference (HPET/PMTIMER) available
+[    0.000000] e820: last_pfn = 0x10000 max_arch_pfn = 0x400000000
+[    0.000000] MTRR: Disabled
+[    0.000000] x86/PAT: MTRRs disabled, skipping PAT initialization too.
+[    0.000000] CPU MTRRs all blank - virtualized system.
+[    0.000000] x86/PAT: Configuration [0-7]: WB  WT  UC- UC  WB  WT  UC- UC  
+[    0.000000] found SMP MP-table at [mem 0x0009fc00-0x0009fc0f]
+[    0.000000] Scanning 1 areas for low memory corruption
+[    0.000000] Using GB pages for direct mapping
+[    0.000000] No NUMA configuration found
+[    0.000000] Faking a node at [mem 0x0000000000000000-0x000000000fffffff]
+[    0.000000] NODE_DATA(0) allocated [mem 0x0ffde000-0x0fffffff]
+[    0.000000] kvm-clock: Using msrs 4b564d01 and 4b564d00
+[    0.000000] kvm-clock: cpu 0, msr 0:ffdc001, primary cpu clock
+[    0.000000] kvm-clock: using sched offset of 42995264 cycles
+[    0.000000] clocksource: kvm-clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+[    0.000000] Zone ranges:
+[    0.000000]   DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+[    0.000000]   DMA32    [mem 0x0000000001000000-0x000000000fffffff]
+[    0.000000]   Normal   empty
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000000001000-0x000000000009efff]
+[    0.000000]   node   0: [mem 0x0000000000100000-0x000000000fffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000000001000-0x000000000fffffff]
+[    0.000000] Intel MultiProcessor Specification v1.4
+[    0.000000] MPTABLE: OEM ID: FC      
+[    0.000000] MPTABLE: Product ID: 000000000000
+[    0.000000] MPTABLE: APIC at: 0xFEE00000
+[    0.000000] Processor #0 (Bootup-CPU)
+[    0.000000] IOAPIC[0]: apic_id 2, version 17, address 0xfec00000, GSI 0-23
+[    0.000000] Processors: 1
+[    0.000000] smpboot: Allowing 1 CPUs, 0 hotplug CPUs
+[    0.000000] PM: Registered nosave memory: [mem 0x00000000-0x00000fff]
+[    0.000000] PM: Registered nosave memory: [mem 0x0009f000-0x0009ffff]
+[    0.000000] PM: Registered nosave memory: [mem 0x000a0000-0x000dffff]
+[    0.000000] PM: Registered nosave memory: [mem 0x000e0000-0x000fffff]
+[    0.000000] e820: [mem 0x10000000-0xffffffff] available for PCI devices
+[    0.000000] Booting paravirtualized kernel on KVM
+[    0.000000] clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645519600211568 ns
+[    0.000000] random: get_random_bytes called from start_kernel+0x94/0x486 with crng_init=0
+[    0.000000] setup_percpu: NR_CPUS:128 nr_cpumask_bits:128 nr_cpu_ids:1 nr_node_ids:1
+[    0.000000] percpu: Embedded 41 pages/cpu s128600 r8192 d31144 u2097152
+[    0.000000] KVM setup async PF for cpu 0
+[    0.000000] kvm-stealtime: cpu 0, msr fc15040
+[    0.000000] PV qspinlock hash table entries: 256 (order: 0, 4096 bytes)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 64393
+[    0.000000] Policy zone: DMA32
+[    0.000000] Kernel command line: console=ttyS0 reboot=k panic=1 pci=off i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd init=/bin/sh root=/dev/vda ro virtio_mmio.device=4K@0xd0000000:5
+[    0.000000] PID hash table entries: 1024 (order: 1, 8192 bytes)
+[    0.000000] Memory: 240032K/261752K available (8204K kernel code, 645K rwdata, 1480K rodata, 1324K init, 2792K bss, 21720K reserved, 0K cma-reserved)
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.004000] Hierarchical RCU implementation.
+[    0.004000] 	RCU restricting CPUs from NR_CPUS=128 to nr_cpu_ids=1.
+[    0.004000] RCU: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=1
+[    0.004000] NR_IRQS: 4352, nr_irqs: 48, preallocated irqs: 16
+[    0.004000] Console: colour dummy device 80x25
+[    0.004000] console [ttyS0] enabled
+[    0.004000] tsc: Detected 2611.200 MHz processor
+[    0.004000] Calibrating delay loop (skipped) preset value.. 5222.40 BogoMIPS (lpj=10444800)
+[    0.004000] pid_max: default: 32768 minimum: 301
+[    0.004000] Security Framework initialized
+[    0.004000] SELinux:  Initializing.
+[    0.004519] Dentry cache hash table entries: 32768 (order: 6, 262144 bytes)
+[    0.005848] Inode-cache hash table entries: 16384 (order: 5, 131072 bytes)
+[    0.006977] Mount-cache hash table entries: 512 (order: 0, 4096 bytes)
+[    0.008013] Mountpoint-cache hash table entries: 512 (order: 0, 4096 bytes)
+[    0.010372] Last level iTLB entries: 4KB 0, 2MB 0, 4MB 0
+[    0.011229] Last level dTLB entries: 4KB 0, 2MB 0, 4MB 0, 1GB 0
+[    0.012014] Spectre V1 : Mitigation: usercopy/swapgs barriers and __user pointer sanitization
+[    0.013378] Spectre V2 : Mitigation: Enhanced IBRS
+[    0.014125] Spectre V2 : Spectre v2 / SpectreRSB mitigation: Filling RSB on context switch
+[    0.015489] Spectre V2 : mitigation: Enabling conditional Indirect Branch Prediction Barrier
+[    0.016007] Speculative Store Bypass: Mitigation: Speculative Store Bypass disabled via prctl and seccomp
+[    0.029046] Freeing SMP alternatives memory: 28K
+[    0.031566] smpboot: Max logical packages: 1
+[    0.032484] x2apic enabled
+[    0.033397] Switched APIC routing to physical x2apic.
+[    0.036000] ..TIMER: vector=0x30 apic1=0 pin1=0 apic2=-1 pin2=-1
+[    0.036000] smpboot: CPU0: Intel(R) Xeon(R) Processor (family: 0x6, model: 0xba, stepping: 0x2)
+[    0.036000] Performance Events: unsupported p6 CPU model 186 no PMU driver, software events only.
+[    0.036000] Hierarchical SRCU implementation.
+[    0.036579] smp: Bringing up secondary CPUs ...
+[    0.037355] smp: Brought up 1 node, 1 CPU
+[    0.038178] smpboot: Total of 1 processors activated (5222.40 BogoMIPS)
+[    0.040075] devtmpfs: initialized
+[    0.040667] x86/mm: Memory block size: 128MB
+[    0.041612] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+[    0.043360] futex hash table entries: 256 (order: 2, 16384 bytes)
+[    0.044396] NET: Registered protocol family 16
+[    0.045364] cpuidle: using governor ladder
+[    0.046095] cpuidle: using governor menu
+[    0.056226] HugeTLB registered 1.00 GiB page size, pre-allocated 0 pages
+[    0.057329] HugeTLB registered 2.00 MiB page size, pre-allocated 0 pages
+[    0.058559] SCSI subsystem initialized
+[    0.059187] pps_core: LinuxPPS API ver. 1 registered
+[    0.059986] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.060024] PTP clock support registered
+[    0.060718] dmi: Firmware registration failed.
+[    0.061589] NetLabel: Initializing
+[    0.062162] NetLabel:  domain hash size = 128
+[    0.062854] NetLabel:  protocols = UNLABELED CIPSOv4 CALIPSO
+[    0.063812] NetLabel:  unlabeled traffic allowed by default
+[    0.064279] clocksource: Switched to clocksource kvm-clock
+[    0.065294] VFS: Disk quotas dquot_6.6.0
+[    0.065918] VFS: Dquot-cache hash table entries: 512 (order 0, 4096 bytes)
+[    0.067978] NET: Registered protocol family 2
+[    0.068818] TCP established hash table entries: 2048 (order: 2, 16384 bytes)
+[    0.070364] TCP bind hash table entries: 2048 (order: 3, 32768 bytes)
+[    0.071499] TCP: Hash tables configured (established 2048 bind 2048)
+[    0.072702] UDP hash table entries: 256 (order: 1, 8192 bytes)
+[    0.073617] UDP-Lite hash table entries: 256 (order: 1, 8192 bytes)
+[    0.074646] NET: Registered protocol family 1
+[    0.075777] virtio-mmio: Registering device virtio-mmio.0 at 0xd0000000-0xd0000fff, IRQ 5.
+[    0.077192] clocksource: tsc: mask: 0xffffffffffffffff max_cycles: 0x25a39079a08, max_idle_ns: 440795310461 ns
+[    0.078892] platform rtc_cmos: registered platform RTC device (no PNP device found)
+[    0.080703] Scanning for low memory corruption every 60 seconds
+[    0.083088] audit: initializing netlink subsys (disabled)
+[    0.084567] Initialise system trusted keyrings
+[    0.085277] Key type blacklist registered
+[    0.086019] audit: type=2000 audit(1792366052.769:1): state=initialized audit_enabled=0 res=1
+[    0.087508] workingset: timestamp_bits=36 max_order=16 bucket_order=0
+[    0.090933] squashfs: version 4.0 (2009/01/31) Phillip Lougher
+[    0.092837] Key type asymmetric registered
+[    0.093637] Asymmetric key parser 'x509' registered
+[    0.094538] Block layer SCSI generic (bsg) driver version 0.4 loaded (major 252)
+[    0.096207] io scheduler noop registered (default)
+[    0.097065] io scheduler cfq registered
+[    0.097798] virtio-mmio virtio-mmio.0: Failed to enable 64-bit or 32-bit DMA.  Trying to continue, but this might not work.
+[    0.099769] Serial: 8250/16550 driver, 1 ports, IRQ sharing disabled
+[    0.124629] serial8250: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a U6_16550A
+[    0.127928] loop: module loaded
+[    0.129315] Loading iSCSI transport class v2.0-870.
+[    0.130213] iscsi: registered transport (tcp)
+[    0.130996] tun: Universal TUN/TAP device driver, 1.6
+[    0.132191] serio: i8042 KBD port at 0x60,0x64 irq 1
+[    0.133089] input: AT Raw Set 2 keyboard as /devices/platform/i8042/serio0/input/input0
+[    0.134459] hidraw: raw HID events driver (C) Jiri Kosina
+[    0.135372] nf_conntrack version 0.5.0 (2048 buckets, 8192 max)
+[    0.136459] ip_tables: (C) 2000-2006 Netfilter Core Team
+[    0.137380] Initializing XFRM netlink socket
+[    0.138106] NET: Registered protocol family 10
+[    0.139460] Segment Routing with IPv6
+[    0.140135] NET: Registered protocol family 17
+[    0.140899] Bridge firewalling registered
+[    0.141858] NET: Registered protocol family 40
+[    0.142969] sched_clock: Marking stable (140118497, 0)->(250351342, -110232845)
+[    0.144464] registered taskstats version 1
+[    0.145156] Loading compiled-in X.509 certificates
+[    0.146345] Loaded X.509 cert 'Build time autogenerated kernel key: e98e9d271da5d0a322cc4d7bfaa8c2c4c3e46010'
+[    0.147983] Key type encrypted registered
+[    0.150021] EXT4-fs (vda): mounted filesystem with ordered data mode. Opts: (null)
+[    0.151673] VFS: Mounted root (ext4 filesystem) readonly on device 254:0.
+[    0.153156] devtmpfs: mounted
+[    0.154572] Freeing unused kernel memory: 1324K
+[    0.164089] Write protecting the kernel read-only data: 12288k
+[    0.167873] Freeing unused kernel memory: 2016K
+[    0.169930] Freeing unused kernel memory: 568K
+/bin/sh: 0: can't access tty; job control turned off
+export PATH=/sbin:/usr/sbin:/bin:/usr/bin
+mount -t proc proc /proc 2>/dev/null || true
+mount -t sysfs sysfs /sys 2>/dev/null || true
+echo ===IP_LINK===
+ip -o link show
+echo ===TCP===
+cat /proc/net/tcp 2>/dev/null || true
+echo ===TCP6===
+cat /proc/net/tcp6 2>/dev/null || true
+echo ===END===
+poweroff -f
+===IP_LINK===
+1: lo: <LOOPBACK> mtu 65536 qdisc noop state DOWN mode DEFAULT group default qlen 1000\    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+===TCP===
+  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode                                                     
+===TCP6===
+  sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+===END===
+[    2.895912] random: fast init done
+Powering off.
+[    2.897555] reboot: System halted

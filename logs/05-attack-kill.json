@@ -1,0 +1,109 @@
+{
+  "agents": [],
+  "events": [],
+  "exported_at": 1792423976,
+  "exported_at_utc": "2026-10-19T15:32:56Z",
+  "format": "monkeyitm-log/v1",
+  "job_events": [],
+  "run_events": [
+    {
+      "at": 1792423916,
+      "at_utc": "2026-10-19T15:31:56Z",
+      "detail": "LSM capability,landlock",
+      "kind": "vsock"
+    },
+    {
+      "at": 1792423916,
+      "at_utc": "2026-10-19T15:31:56Z",
+      "detail": "HELLO supervisor",
+      "kind": "vsock"
+    },
+    {
+      "at": 1792423916,
+      "at_utc": "2026-10-19T15:31:56Z",
+      "detail": "HELLO shell_agent",
+      "kind": "vsock"
+    },
+    {
+      "at": 1792423916,
+      "at_utc": "2026-10-19T15:31:56Z",
+      "detail": "HELLO doc_agent",
+      "kind": "vsock"
+    },
+    {
+      "at": 1792423916,
+      "at_utc": "2026-10-19T15:31:56Z",
+      "detail": "ERROR shell_agent open /usr/lib64 errno=2",
+      "kind": "vsock"
+    },
+    {
+      "at": 1792423916,
+      "at_utc": "2026-10-19T15:31:56Z",
+      "detail": "ALLOW doc_agent write /tmp/doc/benign.txt",
+      "kind": "vsock"
+    },
+    {
+      "at": 1792423916,
+      "at_utc": "2026-10-19T15:31:56Z",
+      "detail": "TRY shell_agent execve /tmp/payload.sh",
+      "kind": "vsock"
+    },
+    {
+      "at": 1792423916,
+      "at_utc": "2026-10-19T15:31:56Z",
+      "detail": "DENY doc_agent write /tmp/payload.sh errno=13",
+      "kind": "vsock"
+    },
+    {
+      "at": 1792423916,
+      "at_utc": "2026-10-19T15:31:56Z",
+      "detail": "DENY shell_agent execve /tmp/payload.sh errno=13",
+      "kind": "vsock"
+    },
+    {
+      "at": 1792423916,
+      "at_utc": "2026-10-19T15:31:56Z",
+      "detail": "DENY doc_agent execve /tmp/payload.sh EACCES",
+      "kind": "vsock"
+    },
+    {
+      "at": 1792423916,
+      "at_utc": "2026-10-19T15:31:56Z",
+      "detail": "TRIPWIRE denials>=3 killing group",
+      "kind": "vsock"
+    },
+    {
+      "at": 1792423916,
+      "at_utc": "2026-10-19T15:31:56Z",
+      "detail": "HALT supervisor",
+      "kind": "vsock"
+    }
+  ],
+  "summary": {
+    "chain": {
+      "algorithm": "sha256",
+      "head": "27639c79bca54df7cfc46e536782f986e0ad0ef9b3e4f6c5e722c9686fb243c6",
+      "rows": 12
+    },
+    "final_verdicts": {
+      "allow": 0,
+      "approve_required": 0,
+      "deny": 0
+    },
+    "halted_by_tripwire": false,
+    "human_escalations": {
+      "allowed": 0,
+      "denied": 0,
+      "pending": 0,
+      "unattended_denied": 0
+    },
+    "intents": 0,
+    "job_events": {
+      "alarms": 0,
+      "broker": 0,
+      "fetcher": 0,
+      "sanitizer": 0
+    },
+    "killed_by_owner": false
+  }
+}

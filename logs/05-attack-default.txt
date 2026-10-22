@@ -1,0 +1,32 @@
+MonkeyITM-VM broker log
+exported 2026-10-19T15:31:56Z
+
+intents: 0   allow: 0   deny: 0   awaiting approval: 0
+escalations: 0 allowed by a human, 0 denied by a human, 0 pending, 0 denied unattended
+
+RUN VSOCK  2026-10-19T15:30:55Z  LSM capability,landlock
+
+RUN VSOCK  2026-10-19T15:30:55Z  HELLO supervisor
+
+RUN VSOCK  2026-10-19T15:30:55Z  HELLO shell_agent
+
+RUN VSOCK  2026-10-19T15:30:55Z  HELLO doc_agent
+
+RUN VSOCK  2026-10-19T15:30:55Z  ERROR shell_agent open /usr/lib64 errno=2
+
+RUN VSOCK  2026-10-19T15:30:55Z  ALLOW doc_agent write /tmp/doc/benign.txt
+
+RUN VSOCK  2026-10-19T15:30:55Z  TRY shell_agent execve /tmp/payload.sh
+
+RUN VSOCK  2026-10-19T15:30:55Z  DENY doc_agent write /tmp/payload.sh errno=13
+
+RUN VSOCK  2026-10-19T15:30:55Z  DENY shell_agent execve /tmp/payload.sh errno=13
+
+RUN VSOCK  2026-10-19T15:30:55Z  DENY doc_agent execve /tmp/payload.sh EACCES
+
+RUN VSOCK  2026-10-19T15:30:55Z  TRY shell_agent execve /bin/true
+
+RUN VSOCK  2026-10-19T15:30:55Z  DONE doc_agent
+
+RUN VSOCK  2026-10-19T15:30:55Z  DONE supervisor
+

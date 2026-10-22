@@ -1,0 +1,43 @@
+{
+  "agents": [],
+  "events": [],
+  "exported_at": 1792386367,
+  "exported_at_utc": "2026-10-19T05:06:07Z",
+  "format": "monkeyitm-log/v1",
+  "job_events": [],
+  "run_events": [
+    {
+      "at": 1792386350,
+      "at_utc": "2026-10-19T05:05:50Z",
+      "detail": "hello from guest\n",
+      "kind": "vsock"
+    }
+  ],
+  "summary": {
+    "chain": {
+      "algorithm": "sha256",
+      "head": "7c7c4acc6e0fca4c2ec50e4a53f1ae531f278517ac7578beb5996fff68fd9b1a",
+      "rows": 1
+    },
+    "final_verdicts": {
+      "allow": 0,
+      "approve_required": 0,
+      "deny": 0
+    },
+    "halted_by_tripwire": false,
+    "human_escalations": {
+      "allowed": 0,
+      "denied": 0,
+      "pending": 0,
+      "unattended_denied": 0
+    },
+    "intents": 0,
+    "job_events": {
+      "alarms": 0,
+      "broker": 0,
+      "fetcher": 0,
+      "sanitizer": 0
+    },
+    "killed_by_owner": false
+  }
+}

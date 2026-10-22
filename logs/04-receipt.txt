@@ -1,0 +1,9 @@
+MonkeyITM-VM broker log
+exported 2026-10-19T05:06:07Z
+
+intents: 0   allow: 0   deny: 0   awaiting approval: 0
+escalations: 0 allowed by a human, 0 denied by a human, 0 pending, 0 denied unattended
+
+RUN VSOCK  2026-10-19T05:05:50Z  hello from guest
+
+

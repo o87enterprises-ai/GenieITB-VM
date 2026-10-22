@@ -1,0 +1,19 @@
+
+==> Starting supervisor (API + vsock, timeout 15s)
+supervisor: Firecracker exit code 124
+
+==> Normalizing serial log
+
+==> Assertions
+PASS: guest booted and ran shell commands
+PASS: only loopback interface (no NIC)
+PASS: no TCP sockets
+PASS: no TCP6 sockets
+PASS: guest reached VSOCK_DONE
+PASS: supervisor received 'hello from guest' over vsock
+
+==> Phase 3 complete — guest <-> host control plane established over vsock.
+
+==> Serial log: /home/chellebelle/GenieITB-VM/logs/03-boot-vsock.log
+
+==> Events log: /home/chellebelle/GenieITB-VM/logs/03-vsock-events.log

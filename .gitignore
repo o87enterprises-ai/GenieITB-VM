@@ -1,0 +1,19 @@
+# Large/regenerable build artifacts — not source, not meant to be versioned.
+# Rootfs images are rebuilt by scripts/*; kernel tree is a full upstream build dir.
+rootfs/*.ext4
+kernel/linux-6.1.167/
+kernel/*.o
+kernel/*.bin
+kernel/*.bin.bak
+*.o
+*.ko
+
+# Compiled agent binaries (rebuilt by the musl-gcc + install steps in the scripts)
+/tmp/
+*.elf
+
+# Editor/OS noise
+.DS_Store
+*.swp
+scripts/__pycache__/
+**/__pycache__/

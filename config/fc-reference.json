@@ -1,0 +1,19 @@
+{
+  "boot-source": {
+    "kernel_image_path": "/home/chellebelle/GenieITB-VM/kernel/vmlinux.bin",
+    "boot_args": "console=ttyS0 reboot=k panic=1 pci=off i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd init=/bin/sh"
+  },
+  "drives": [
+    {
+      "drive_id": "rootfs",
+      "path_on_host": "/home/chellebelle/GenieITB-VM/rootfs/rootfs.ext4",
+      "is_root_device": true,
+      "is_read_only": true
+    }
+  ],
+  "machine-config": {
+    "vcpu_count": 1,
+    "mem_size_mib": 256,
+    "smt": false
+  }
+}

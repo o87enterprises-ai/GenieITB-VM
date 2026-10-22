@@ -1,0 +1,28 @@
+==> Starting supervisor (API + vsock + receipt, timeout 15s)
+supervisor: Firecracker exit code 124
+supervisor: receipt 1 entries, head 7c7c4acc6e0fca4c2ec50e4a53f1ae531f278517ac7578beb5996fff68fd9b1a (OK)
+
+==> Normalizing serial log
+==> Assertions
+PASS: guest booted and ran shell commands
+PASS: only loopback interface (no NIC)
+PASS: loopback interface present
+PASS: no TCP sockets
+PASS: no TCP6 sockets
+PASS: guest reached VSOCK_DONE
+PASS: supervisor received 'hello from guest' over vsock
+
+==> Verifying receipt chain with broker
+PASS: broker verify: every record is in the chain and unchanged
+
+==> Exporting receipt
+broker: exported 0 intent(s) to /home/chellebelle/GenieITB-VM/logs/04-receipt.json
+broker: exported 0 intent(s) to /home/chellebelle/GenieITB-VM/logs/04-receipt.txt
+
+==> Phase 4 complete — hash-chained receipt written before ack, verified by broker.
+
+==> Serial log:   /home/chellebelle/GenieITB-VM/logs/04-boot-receipt.log
+==> Events log:   /home/chellebelle/GenieITB-VM/logs/04-vsock-events.log
+==> Receipt db:   /home/chellebelle/GenieITB-VM/logs/04-receipt.db
+==> Receipt json: /home/chellebelle/GenieITB-VM/logs/04-receipt.json
+==> Receipt text: /home/chellebelle/GenieITB-VM/logs/04-receipt.txt

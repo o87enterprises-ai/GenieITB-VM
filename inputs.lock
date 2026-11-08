@@ -6,8 +6,10 @@
 # Extracted binaries installed under bin/ (checked by verify-inputs.sh --installed)
 99ad0f5cd0514a88aad0e9ae8cfdb3cc3b4ab9d190e1194602406c786b5de7a5  bin/firecracker  -
 65ef226e96f0ceda55ba643f445801ef2cc0ea667ef67cad8ac4f406c9c8434f  bin/jailer  -
-# TODO(reviewer): fill after first verified download; the build refuses TODO entries.
-TODO  linux-6.1.x.tar.xz  https://cdn.kernel.org/pub/linux/kernel/v6.x/
-TODO  microvm-kernel-ci-x86_64-6.1.config  vendored copy under config/ (stop fetching from main)
-TODO  reference-vmlinux.bin  https://s3.amazonaws.com/spec.ccfc.min/img/quickstart_guide/x86_64/kernels/vmlinux.bin
-TODO  reference-rootfs.ext4  https://s3.amazonaws.com/spec.ccfc.min/img/quickstart_guide/x86_64/rootfs/bionic.rootfs.ext4
+# Kernel source (hash matches kernel.org sha256sums.asc; autosigner PGP signature checked 2026-11-08)
+2818053c07976ba4ed5f44deb0f5dc7ae7b0975d7918c313d48d8fe7c4e598cb  linux-6.1.167.tar.xz  https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.1.167.tar.xz
+# Vendored hardened guest config. Change deliberately and update this hash in the same review.
+3f707b8b2491908df9c015cb0563211a9248c8547ce627b7ba8b88248cecb428  config/guest-kernel-6.1.config  -
+# Firecracker quickstart reference artifacts (Phase 0/1 only; fresh downloads matched local copies)
+ea5e7d5cf494a8c4ba043259812fc018b44880d70bcbbfc4d57d2760631b1cd6  reference-vmlinux.bin  https://s3.amazonaws.com/spec.ccfc.min/img/quickstart_guide/x86_64/kernels/vmlinux.bin
+2a840feeccb5cb161c6eab1ecd86667c06ed5e307da534d2d3c9e39a6ec6c30a  reference-rootfs.ext4  https://s3.amazonaws.com/spec.ccfc.min/img/quickstart_guide/x86_64/rootfs/bionic.rootfs.ext4

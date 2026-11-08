@@ -28,6 +28,7 @@ if [ ! -d "$KDIR" ]; then
   TMP="$(mktemp -d)"
   curl -fsSL -o "$TMP/linux.tar.xz" \
     "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${KVER}.tar.xz"
+  "$ROOT/scripts/verify-inputs.sh" "linux-${KVER}.tar.xz" "$TMP/linux.tar.xz"
   tar -xf "$TMP/linux.tar.xz" -C "$ROOT/kernel"
   rm -rf "$TMP"
 fi
@@ -37,6 +38,7 @@ cd "$KDIR"
 # --- 3. Start from Firecracker's 6.1 guest config --------------------------
 if [ -f "$VENDORED_CONFIG" ]; then
   say "Using vendored guest config $VENDORED_CONFIG"
+  "$ROOT/scripts/verify-inputs.sh" config/guest-kernel-6.1.config "$VENDORED_CONFIG"
   cp "$VENDORED_CONFIG" .config
 else
   say "WARNING: no vendored config; fetching from a moving branch (EXT-05). Vendor the result."
@@ -139,7 +141,8 @@ done
 # --- 9. Install alongside, never over the working kernel ------------------
 say "Writing $KERNEL_OUT"
 cp vmlinux "$KERNEL_OUT"
-mkdir -p "$ROOT/config" && cp .config "$VENDORED_CONFIG"
+# Only seed the vendored config once; afterwards it is pinned in inputs.lock.
+[ -f "$VENDORED_CONFIG" ] || { mkdir -p "$ROOT/config"; cp .config "$VENDORED_CONFIG"; }
 sha256sum "$KERNEL_OUT"
 ls -lh "$KERNEL_OUT"
 say "Test:    KERNEL=$KERNEL_OUT ./scripts/05-boot-attack.sh default && ... kill"

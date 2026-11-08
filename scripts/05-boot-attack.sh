@@ -6,7 +6,7 @@ case "$MODE" in default|kill) ;; *) echo "usage: $0 [default|kill]" >&2; exit 2;
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FC="$ROOT/bin/firecracker"
 KERNEL="${KERNEL:-$ROOT/kernel/vmlinux.bin}"
-ROOTFS="${ROOTFS:-$ROOT/rootfs/05-rootfs.ext4}"
+ROOTFS="${ROOTFS:-$ROOT/rootfs/05-rootfs-minimal.ext4}"   # build: scripts/build-minimal-rootfs.sh
 SERIAL="$ROOT/logs/05-attack-${MODE}.log"
 SERIAL_NORM="$ROOT/logs/05-attack-${MODE}.norm.log"
 EVENTS="$ROOT/logs/05-attack-${MODE}.events.log"

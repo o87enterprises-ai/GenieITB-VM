@@ -5,8 +5,8 @@ case "$MODE" in default|kill) ;; *) echo "usage: $0 [default|kill]" >&2; exit 2;
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FC="$ROOT/bin/firecracker"
-KERNEL="$ROOT/kernel/vmlinux.bin"
-ROOTFS="$ROOT/rootfs/05-rootfs.ext4"
+KERNEL="${KERNEL:-$ROOT/kernel/vmlinux.bin}"
+ROOTFS="${ROOTFS:-$ROOT/rootfs/05-rootfs.ext4}"
 SERIAL="$ROOT/logs/05-attack-${MODE}.log"
 SERIAL_NORM="$ROOT/logs/05-attack-${MODE}.norm.log"
 EVENTS="$ROOT/logs/05-attack-${MODE}.events.log"
@@ -20,7 +20,16 @@ for f in "$FC" "$KERNEL" "$ROOTFS" \
          "$BROKER"; do
   [[ -e "$f" ]] || { echo "missing: $f" >&2; exit 2; }
 done
-rm -f "$RECEIPT" "$RECEIPT-wal" "$RECEIPT-shm"
+
+# EXT-05: refuse to run with unpinned/modified VMM binaries.
+"$ROOT/scripts/verify-inputs.sh" --installed || { echo "input verification failed" >&2; exit 2; }
+
+# EXT-04: archive the previous receipt instead of destroying evidence.
+if [[ -e "$RECEIPT" ]]; then
+  mkdir -p "$ROOT/logs/archive"
+  mv "$RECEIPT" "$ROOT/logs/archive/05-attack-${MODE}-$(date -u +%Y%m%dT%H%M%SZ).db"
+fi
+rm -f "$RECEIPT-wal" "$RECEIPT-shm"
 
 INIT_TARGET=/init
 [[ "$MODE" == "kill" ]] && INIT_TARGET=/init-trip
@@ -54,6 +63,20 @@ if "$BROKER" verify --db "$RECEIPT" > /tmp/broker-verify-05.out 2>&1 \
   pass "broker verify: every record is in the chain and unchanged"
 else
   bad "broker verify failed"; cat /tmp/broker-verify-05.out
+fi
+
+# EXT-04: keyed out-of-band anchor. Strict by default; ALLOW_NO_ANCHOR=1 to opt out (demo only).
+if [[ -n "${ANCHOR_KEY_FILE:-}" ]]; then
+  if python3 "$ROOT/scripts/anchor.py" write "$RECEIPT" "05-${MODE}" \
+     && python3 "$ROOT/scripts/anchor.py" verify "$RECEIPT" "05-${MODE}"; then
+    pass "receipt anchored and anchor-verified"
+  else
+    bad "receipt anchoring failed"
+  fi
+elif [[ "${ALLOW_NO_ANCHOR:-0}" == "1" ]]; then
+  echo "WARN: no ANCHOR_KEY_FILE; receipt is NOT tamper-evident against a host-level attacker" >&2
+else
+  bad "ANCHOR_KEY_FILE not set (set it, or ALLOW_NO_ANCHOR=1 for a demo run)"
 fi
 
 "$BROKER" export --db "$RECEIPT" --format json --out "$EXPORT_JSON"

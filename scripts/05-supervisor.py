@@ -45,6 +45,28 @@ def api_put(sock_path, path, body):
     finally:
         conn.close()
 
+def api_get(sock_path, path):
+    conn = UnixHTTPConnection(sock_path)
+    try:
+        conn.request("GET", path)
+        resp = conn.getresponse(); data = resp.read()
+        if resp.status >= 300:
+            raise RuntimeError(f"GET {path} -> {resp.status}: {data!r}")
+        return json.loads(data)
+    finally:
+        conn.close()
+
+def assert_no_network(sock_path):
+    """EXT-01: the no-NIC property must be enforced, not assumed. Abort before
+    InstanceStart if the VM config carries any network interface or MMDS."""
+    cfg = api_get(sock_path, "/vm/config")
+    nics = cfg.get("network-interfaces") or []
+    if nics:
+        raise RuntimeError(f"REFUSING TO START: {len(nics)} network interface(s) configured "
+                           "and no ingress/egress policy exists (see HANDOFF_PERIMETER.md)")
+    if cfg.get("mmds-config"):
+        raise RuntimeError("REFUSING TO START: MMDS configured")
+
 def run_vsock_listener(listen_path, events_path, receipt_db, ready_event, stop_event):
     try: os.unlink(listen_path)
     except FileNotFoundError: pass
@@ -161,6 +183,7 @@ def main():
             api_put(api_sock, "/machine-config", {
                 "vcpu_count": 1, "mem_size_mib": 256, "smt": False})
             api_put(api_sock, "/vsock", {"guest_cid": 3, "uds_path": uds_prefix})
+            assert_no_network(api_sock)
             api_put(api_sock, "/actions", {"action_type": "InstanceStart"})
             try:
                 rc = proc.wait(timeout=args.run_timeout)

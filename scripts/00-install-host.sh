@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-FC_VERSION="${FC_VERSION:-v1.8.0}"
+FC_VERSION="${FC_VERSION:-v1.17.0}"   # pinned in inputs.lock
 ARCH="$(uname -m)"
 KERNEL_VERSION="${KERNEL_VERSION:-5.10.223}"
 
@@ -24,15 +24,10 @@ sudo apt-get install -y \
   python3 python3-venv \
   bubblewrap
 
-# --- 3. Rust (if not already installed) ------------------------------------
-if ! command -v cargo >/dev/null 2>&1; then
-  say "Installing Rust via rustup"
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-  # shellcheck disable=SC1091
-  source "$HOME/.cargo/env"
-else
-  say "Rust already present: $(cargo --version)"
-fi
+# --- 3. Rust ----------------------------------------------------------------
+# EXT-05: no `curl | sh`. Rust is only needed to build the sibling `broker`; install it
+# from your distro or a rustup-init whose hash you have verified, then re-run.
+command -v cargo >/dev/null 2>&1 || say "NOTE: cargo not found (needed only to build broker)"
 
 # --- 4. Firecracker binary -------------------------------------------------
 mkdir -p "$ROOT/bin" "$ROOT/kernel" "$ROOT/rootfs" "$ROOT/logs" "$ROOT/config"
@@ -41,7 +36,9 @@ if [ ! -x "$ROOT/bin/firecracker" ]; then
   TMP="$(mktemp -d)"
   curl -fsSL -o "$TMP/fc.tgz" \
     "https://github.com/firecracker-microvm/firecracker/releases/download/${FC_VERSION}/firecracker-${FC_VERSION}-${ARCH}.tgz"
-  tar -xzf "$TMP/fc.tgz" -C "$TMP"
+  # EXT-05: fail closed unless the tarball matches inputs.lock.
+  "$ROOT/scripts/verify-inputs.sh" "firecracker-${FC_VERSION}-${ARCH}.tgz" "$TMP/fc.tgz"
+  tar -xzf "$TMP/fc.tgz" -C "$TMP" --no-same-owner
 
   # The tarball extracts to release-vX.Y.Z-<arch>/, not firecracker-vX.Y.Z-<arch>/
   FC_DIR="release-${FC_VERSION}-${ARCH}"
@@ -53,6 +50,8 @@ if [ ! -x "$ROOT/bin/firecracker" ]; then
 
   install -m 0755 "$TMP/${FC_DIR}/firecracker-${FC_VERSION}-${ARCH}" \
     "$ROOT/bin/firecracker"
+  install -m 0755 "$TMP/${FC_DIR}/jailer-${FC_VERSION}-${ARCH}" "$ROOT/bin/jailer"
+  "$ROOT/scripts/verify-inputs.sh" --installed
   rm -rf "$TMP"
 fi
 
@@ -65,6 +64,8 @@ if [ ! -f "$ROOT/kernel/vmlinux.bin" ]; then
   say "Downloading reference vmlinux (Firecracker quickstart)"
   curl -fsSL -o "$ROOT/kernel/vmlinux.bin" \
     "https://s3.amazonaws.com/spec.ccfc.min/img/quickstart_guide/x86_64/kernels/vmlinux.bin"
+  "$ROOT/scripts/verify-inputs.sh" reference-vmlinux.bin "$ROOT/kernel/vmlinux.bin" \
+    || { rm -f "$ROOT/kernel/vmlinux.bin"; echo "unpinned download removed (EXT-05)"; exit 1; }
 fi
 ls -lh "$ROOT/kernel/vmlinux.bin"
 
@@ -73,6 +74,8 @@ if [ ! -f "$ROOT/rootfs/rootfs.ext4" ]; then
   say "Downloading reference rootfs.ext4"
   curl -fsSL -o "$ROOT/rootfs/rootfs.ext4" \
     "https://s3.amazonaws.com/spec.ccfc.min/img/quickstart_guide/x86_64/rootfs/bionic.rootfs.ext4"
+  "$ROOT/scripts/verify-inputs.sh" reference-rootfs.ext4 "$ROOT/rootfs/rootfs.ext4" \
+    || { rm -f "$ROOT/rootfs/rootfs.ext4"; echo "unpinned download removed (EXT-05)"; exit 1; }
 fi
 ls -lh "$ROOT/rootfs/rootfs.ext4"
 

@@ -5,7 +5,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KVER="6.1.167"
 KDIR="$ROOT/kernel/linux-${KVER}"
 CONFIG_URL="https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/resources/guest_configs/microvm-kernel-ci-x86_64-6.1.config"
-BACKUP="$ROOT/kernel/vmlinux-4.14-quickstart.bin.bak"
+VENDORED_CONFIG="$ROOT/config/guest-kernel-6.1.config"
+# EXT-07: never overwrite the known-good kernel; write alongside and promote after SS1 passes.
+KERNEL_OUT="${KERNEL_OUT:-$ROOT/kernel/vmlinux-hardened.bin}"
+JOBS="${JOBS:-$(nproc)}"
 
 say() { printf '\n==> %s\n' "$*"; }
 
@@ -32,8 +35,13 @@ fi
 cd "$KDIR"
 
 # --- 3. Start from Firecracker's 6.1 guest config --------------------------
-say "Fetching Firecracker 6.1 guest config"
-curl -fsSL -o .config "$CONFIG_URL"
+if [ -f "$VENDORED_CONFIG" ]; then
+  say "Using vendored guest config $VENDORED_CONFIG"
+  cp "$VENDORED_CONFIG" .config
+else
+  say "WARNING: no vendored config; fetching from a moving branch (EXT-05). Vendor the result."
+  curl -fsSL -o .config "$CONFIG_URL"
+fi
 
 # --- 4. Enable required options --------------------------------------------
 # The critical fix vs the first build:
@@ -60,7 +68,19 @@ scripts/config --file .config \
   --enable  CONFIG_SECCOMP_FILTER \
   --enable  CONFIG_SECURITY \
   --enable  CONFIG_SECURITY_LANDLOCK \
-  --set-str CONFIG_LSM "landlock,lockdown,yama,integrity,apparmor" \
+  --set-str CONFIG_LSM "landlock,lockdown,yama" \
+  --enable  CONFIG_SECURITY_LOCKDOWN_LSM \
+  --enable  CONFIG_LOCK_DOWN_KERNEL_FORCE_INTEGRITY \
+  --enable  CONFIG_SECURITY_YAMA \
+  --enable  CONFIG_SECURITY_DMESG_RESTRICT \
+  --enable  CONFIG_INIT_ON_ALLOC_DEFAULT_ON \
+  --enable  CONFIG_EXPERT \
+  --disable CONFIG_IO_URING --disable CONFIG_USER_NS --disable CONFIG_BPF_SYSCALL \
+  --disable CONFIG_USERFAULTFD --disable CONFIG_CHECKPOINT_RESTORE \
+  --disable CONFIG_DEBUG_FS --disable CONFIG_MAGIC_SYSRQ --disable CONFIG_KEXEC_FILE \
+  --disable CONFIG_UEVENT_HELPER --disable CONFIG_IA32_EMULATION \
+  --disable CONFIG_NETFILTER --disable CONFIG_PACKET --disable CONFIG_VIRTIO_NET \
+  --disable CONFIG_INET \
   --disable CONFIG_DEBUG_INFO \
   --disable CONFIG_DEBUG_INFO_BTF \
   --disable CONFIG_KASAN \
@@ -97,10 +117,11 @@ if ! grep '^CONFIG_LSM=' .config | grep -q landlock; then
   exit 1
 fi
 echo "All required symbols are enabled."
+"$ROOT/scripts/audit-kernel-config.sh" .config
 
 # --- 7. Build the uncompressed vmlinux -------------------------------------
 say "Building vmlinux (this takes 10-20 minutes on a cold tree)"
-make vmlinux -j"$(nproc)"
+make vmlinux -j"$JOBS"
 
 # --- 8. Verify the binary contains the symbols we need ---------------------
 # grep -a on the binary rather than `strings | grep -q`: under set -o pipefail
@@ -115,12 +136,11 @@ for pat in virtio_blk virtio_mmio vsock; do
   echo "OK: '$pat' present in vmlinux"
 done
 
-# --- 9. Install the new kernel ---------------------------------------------
-say "Installing new kernel"
-[ -f "$ROOT/kernel/vmlinux.bin" ] && [ ! -f "$BACKUP" ] && cp "$ROOT/kernel/vmlinux.bin" "$BACKUP"
-cp vmlinux "$ROOT/kernel/vmlinux.bin"
-
-ls -lh "$ROOT/kernel/vmlinux.bin"
-say "Kernel replaced with 6.1 + PCI + virtio-mmio + vsock + Landlock."
-say "Backup: $BACKUP"
-say "Next:   ./03-setup.sh && ./03-boot-vsock.sh"
+# --- 9. Install alongside, never over the working kernel ------------------
+say "Writing $KERNEL_OUT"
+cp vmlinux "$KERNEL_OUT"
+mkdir -p "$ROOT/config" && cp .config "$VENDORED_CONFIG"
+sha256sum "$KERNEL_OUT"
+ls -lh "$KERNEL_OUT"
+say "Test:    KERNEL=$KERNEL_OUT ./scripts/05-boot-attack.sh default && ... kill"
+say "Promote: cp $KERNEL_OUT kernel/vmlinux.bin   (only after both SS1 modes pass)"

@@ -19,3 +19,5 @@ scripts/__pycache__/
 **/__pycache__/
 baseline-default.log
 baseline-kill.log
+logs/archive/
+rootfs/05-rootfs-hardened.ext4

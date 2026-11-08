@@ -23,6 +23,8 @@ done
 
 # EXT-05: refuse to run with unpinned/modified VMM binaries.
 "$ROOT/scripts/verify-inputs.sh" --installed || { echo "input verification failed" >&2; exit 2; }
+"$ROOT/scripts/verify-inputs.sh" broker "$BROKER" || { echo "broker does not match inputs.lock" >&2; exit 2; }
+[[ -n "${JAIL_USER:-}" ]] || echo "WARN: running WITHOUT the jailer (set JAIL_USER=<account> to confine the VMM)" >&2
 
 # EXT-04: archive the previous receipt instead of destroying evidence.
 if [[ -e "$RECEIPT" ]]; then

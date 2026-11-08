@@ -20,6 +20,7 @@ check() {
 if [[ "${1:-}" == "--installed" ]]; then
   check bin/firecracker "$ROOT/bin/firecracker"
   check bin/jailer      "$ROOT/bin/jailer"
+  check guest-agent/agent "$ROOT/guest-agent/agent"
 else
   [[ $# -eq 2 ]] || { echo "usage: $0 --installed | <name> <file>" >&2; exit 2; }
   check "$1" "$2"

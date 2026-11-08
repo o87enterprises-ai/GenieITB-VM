@@ -9,7 +9,7 @@ The guest refuses to proceed without an ack (receipt not committed).
 Guest powers itself off after DONE supervisor (default run) or after
 TRIPWIRE (kill run). We just wait for Firecracker to exit.
 """
-import argparse, http.client, importlib.util, json, os, socket, subprocess, sys, tempfile, threading, time
+import argparse, http.client, importlib.util, json, os, shutil, signal, socket, stat, subprocess, sys, tempfile, threading, time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _spec = importlib.util.spec_from_file_location(
@@ -67,11 +67,18 @@ def assert_no_network(sock_path):
     if cfg.get("mmds-config"):
         raise RuntimeError("REFUSING TO START: MMDS configured")
 
-def run_vsock_listener(listen_path, events_path, receipt_db, ready_event, stop_event):
+def bind_listener(listen_path, owner=None):
     try: os.unlink(listen_path)
     except FileNotFoundError: pass
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.bind(listen_path); sock.listen(8); sock.settimeout(1.0)
+    sock.bind(listen_path)
+    if owner is not None:
+        os.chown(listen_path, owner[0], owner[1])
+        os.chmod(listen_path, 0o600)
+    sock.listen(8); sock.settimeout(1.0)
+    return sock
+
+def run_vsock_listener(sock, listen_path, events_path, receipt_db, ready_event, stop_event):
     ready_event.set()
     try:
         while not stop_event.is_set():
@@ -126,7 +133,7 @@ def run_vsock_listener(listen_path, events_path, receipt_db, ready_event, stop_e
     finally:
         sock.close()
         try: os.unlink(listen_path)
-        except FileNotFoundError: pass
+        except OSError: pass   # in jail mode the jail teardown removes it
 
 def dump_serial_tail(serial_path, n=40):
     try:
@@ -138,53 +145,106 @@ def dump_serial_tail(serial_path, n=40):
     except Exception as e:
         print(f"(failed to read serial log: {e})", file=sys.stderr)
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--firecracker", required=True)
-    ap.add_argument("--kernel", required=True)
-    ap.add_argument("--rootfs", required=True)
-    ap.add_argument("--serial-log", required=True)
-    ap.add_argument("--events-log", required=True)
-    ap.add_argument("--receipt-db", required=True)
-    ap.add_argument("--init-target", default="/init", choices=["/init", "/init-trip"])
-    ap.add_argument("--run-timeout", type=float, default=60.0)
-    args = ap.parse_args()
+# --- EXT-03: jailed launch --------------------------------------------------
+JAIL_MEMORY_MAX = 384 * 1024 * 1024   # 256 MiB guest + VMM overhead
+JAIL_API_SOCK, JAIL_UDS = "/api.sock", "/fc-vsock.sock"
 
-    boot_args = ("console=ttyS0 reboot=k panic=1 pci=off "
-                 "i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd "
-                 f"init={args.init_target}")
-    open(args.events_log, "wb").close()
+def prepare_jail(args, jail_id):
+    """Create the chroot and copy boot artifacts in. Runs as root."""
+    exec_name = os.path.basename(args.firecracker)
+    if "firecracker" not in exec_name:
+        raise RuntimeError("jailer requires the exec file name to contain 'firecracker'")
+    base = args.chroot_base
+    os.makedirs(base, mode=0o755, exist_ok=True)
+    st = os.lstat(base)
+    # CVE-2026-1386 class: the base must be a real root-owned directory.
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        raise RuntimeError(f"{base} must be a root-owned directory not writable by others")
+    os.makedirs(os.path.join(base, exec_name), mode=0o755, exist_ok=True)
+    jail_dir = os.path.join(base, exec_name, jail_id)
+    root = os.path.join(jail_dir, "root")
+    os.mkdir(jail_dir, 0o755)   # fails if it already exists
+    os.mkdir(root, 0o755)
+    for src, name in ((args.kernel, "vmlinux.bin"), (args.rootfs, "rootfs.ext4")):
+        dst = os.path.join(root, name)
+        shutil.copyfile(src, dst)
+        os.chown(dst, args.jail_uid, args.jail_gid)
+        os.chmod(dst, 0o440)
+    os.chown(root, args.jail_uid, args.jail_gid)
+    return jail_dir, root
 
-    with tempfile.TemporaryDirectory(prefix="fc-supervisor-05-") as tmp:
-        api_sock = os.path.join(tmp, "fc.sock")
-        uds_prefix = os.path.join(tmp, "fc-vsock.sock")
-        uds_listen = uds_prefix + "_5000"
-        ready_event = threading.Event(); stop_event = threading.Event()
-        listener_thread = threading.Thread(target=run_vsock_listener,
-            args=(uds_listen, args.events_log, args.receipt_db, ready_event, stop_event),
-            daemon=True)
-        listener_thread.start()
-        if not ready_event.wait(timeout=2.0):
-            print("supervisor: vsock listener did not become ready", file=sys.stderr)
-            return 1
+def jailer_argv(args, jail_id):
+    return [args.jailer, "--id", jail_id, "--exec-file", os.path.realpath(args.firecracker),
+            "--uid", str(args.jail_uid), "--gid", str(args.jail_gid),
+            "--chroot-base-dir", args.chroot_base, "--cgroup-version", "2", "--new-pid-ns",
+            "--cgroup", f"memory.max={JAIL_MEMORY_MAX}",
+            "--cgroup", "cpu.max=100000 100000",
+            "--cgroup", "pids.max=64",
+            "--", "--api-sock", JAIL_API_SOCK]
 
-        serial_f = open(args.serial_log, "wb")
-        proc = None; rc = None
+def teardown_jail(jail_dir, exec_name, jail_id):
+    shutil.rmtree(jail_dir, ignore_errors=True)   # does not follow symlinks
+    # A just-killed VMM can keep the cgroup busy briefly.
+    for _ in range(30):
         try:
-            proc = subprocess.Popen([args.firecracker, "--api-sock", api_sock],
-                stdin=subprocess.DEVNULL,
-                stdout=serial_f, stderr=subprocess.STDOUT)
-            wait_for_socket(api_sock)
-            api_put(api_sock, "/boot-source", {
-                "kernel_image_path": args.kernel, "boot_args": boot_args})
-            api_put(api_sock, "/drives/rootfs", {
-                "drive_id": "rootfs", "path_on_host": args.rootfs,
-                "is_root_device": True, "is_read_only": True})
-            api_put(api_sock, "/machine-config", {
-                "vcpu_count": 1, "mem_size_mib": 256, "smt": False})
-            api_put(api_sock, "/vsock", {"guest_cid": 3, "uds_path": uds_prefix})
-            assert_no_network(api_sock)
-            api_put(api_sock, "/actions", {"action_type": "InstanceStart"})
+            os.rmdir(f"/sys/fs/cgroup/{exec_name}/{jail_id}")
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            time.sleep(0.1)
+    print(f"supervisor: could not remove cgroup for {jail_id}", file=sys.stderr)
+
+def drop_privileges(uid, gid):
+    os.setgroups([])
+    os.setresgid(gid, gid, gid)
+    os.setresuid(uid, uid, uid)
+    if os.geteuid() != uid or os.getegid() != gid:
+        raise RuntimeError("failed to drop privileges")
+
+def vm_alive(pid):
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return f.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except OSError:
+        return False
+
+def check_confined(pid, jail_uid):
+    """EXT-03 acceptance, checked against the live process. Any mismatch fails the run."""
+    status = open(f"/proc/{pid}/status").read()
+    field = lambda k: next(l.split()[1:] for l in status.splitlines() if l.startswith(k + ":"))
+    uid, nspid = field("Uid"), field("NSpid")
+    if any(int(u) != jail_uid for u in uid):
+        raise RuntimeError(f"VMM uid is {uid}, expected {jail_uid}")
+    if len(nspid) < 2:
+        raise RuntimeError("VMM is not in its own PID namespace")
+    if not os.path.exists(f"/proc/{pid}/root/vmlinux.bin") or os.path.exists(f"/proc/{pid}/root/home"):
+        raise RuntimeError("VMM root is not the chroot")
+    cg = open(f"/proc/{pid}/cgroup").read().strip().split("::", 1)[1]
+    mem = open(f"/sys/fs/cgroup{cg}/memory.max").read().strip()
+    if mem != str(JAIL_MEMORY_MAX):
+        raise RuntimeError(f"memory.max is {mem}, expected {JAIL_MEMORY_MAX}")
+    print(f"supervisor: JAIL CONFIRMED uid={uid[0]} nspid={'/'.join(nspid)} "
+          f"cgroup={cg} memory.max={mem}", file=sys.stderr)
+
+def run_vmm(args, boot_args, argv, api_sock, kernel, rootfs, uds_path, pid_file=None):
+    """Launch the VMM, configure it, and wait for it. Returns its exit code."""
+    serial_f = open(args.serial_log, "wb")
+    proc = None; rc = None; vm_pid = None
+    try:
+        proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL,
+                                stdout=serial_f, stderr=subprocess.STDOUT)
+        wait_for_socket(api_sock)
+        api_put(api_sock, "/boot-source", {"kernel_image_path": kernel, "boot_args": boot_args})
+        api_put(api_sock, "/drives/rootfs", {
+            "drive_id": "rootfs", "path_on_host": rootfs,
+            "is_root_device": True, "is_read_only": True})
+        api_put(api_sock, "/machine-config", {
+            "vcpu_count": 1, "mem_size_mib": 256, "smt": False})
+        api_put(api_sock, "/vsock", {"guest_cid": 3, "uds_path": uds_path})
+        assert_no_network(api_sock)
+        api_put(api_sock, "/actions", {"action_type": "InstanceStart"})
+        if pid_file is None:
             try:
                 rc = proc.wait(timeout=args.run_timeout)
             except subprocess.TimeoutExpired:
@@ -196,18 +256,121 @@ def main():
                 except subprocess.TimeoutExpired:
                     proc.kill(); proc.wait()
                 rc = 124
-        finally:
-            serial_f.close()
-            if proc is not None and proc.poll() is None:
-                proc.kill(); proc.wait()
-        time.sleep(0.3); stop_event.set(); listener_thread.join(timeout=2.0)
-        print(f"supervisor: Firecracker exit code {rc}", file=sys.stderr)
+        else:
+            # With --new-pid-ns the jailer parent exits and records the VMM's pid.
+            parent_rc = proc.wait(timeout=5)
+            if parent_rc != 0:
+                raise RuntimeError(f"jailer exited {parent_rc}")
+            with open(pid_file) as f:
+                vm_pid = int(f.read().strip())
+            check_confined(vm_pid, args.jail_uid)
+            deadline = time.time() + args.run_timeout
+            while vm_alive(vm_pid) and time.time() < deadline:
+                time.sleep(0.1)
+            if vm_alive(vm_pid):
+                print(f"supervisor: Firecracker did not exit within {args.run_timeout}s",
+                      file=sys.stderr)
+                dump_serial_tail(args.serial_log)
+                rc = 124
+            else:
+                rc = 0
+    finally:
+        serial_f.close()
+        if proc is not None and proc.poll() is None:
+            proc.kill(); proc.wait()
+        if vm_pid is not None and vm_alive(vm_pid):
+            os.kill(vm_pid, signal.SIGKILL)
+    return rc
+
+def finish(args, listener_thread, stop_event, rc):
+    time.sleep(0.3); stop_event.set(); listener_thread.join(timeout=2.0)
+    print(f"supervisor: Firecracker exit code {rc}", file=sys.stderr)
+    try:
+        ok, msg = receipt.verify(args.receipt_db)
+        print(f"supervisor: receipt {msg} ({'OK' if ok else 'BROKEN'})", file=sys.stderr)
+    except Exception as e:
+        print(f"supervisor: receipt check failed: {e}", file=sys.stderr)
+
+def start_listener(args, sock, listen_path, stop_event):
+    ready_event = threading.Event()
+    t = threading.Thread(target=run_vsock_listener,
+        args=(sock, listen_path, args.events_log, args.receipt_db, ready_event, stop_event),
+        daemon=True)
+    t.start()
+    if not ready_event.wait(timeout=2.0):
+        raise RuntimeError("vsock listener did not become ready")
+    return t
+
+def main_jailed(args, boot_args):
+    """Root is kept only by the child that launches and tears down the jail. The parent,
+    which reads guest-supplied lines and writes receipts, drops to the invoking user."""
+    if os.geteuid() != 0 or "SUDO_UID" not in os.environ:
+        print("supervisor: jail mode must be started through sudo", file=sys.stderr); return 2
+    if not args.jail_uid or not args.jail_gid:
+        print("supervisor: --jail-uid/--jail-gid must be non-root", file=sys.stderr); return 2
+    owner_uid, owner_gid = int(os.environ["SUDO_UID"]), int(os.environ["SUDO_GID"])
+    exec_name = os.path.basename(args.firecracker)
+    jail_id = f"genie-{os.getpid()}"
+    jail_dir, root = prepare_jail(args, jail_id)
+    listen_path = os.path.join(root, JAIL_UDS.lstrip("/") + "_5000")
+    sock = bind_listener(listen_path, owner=(args.jail_uid, args.jail_gid))
+    child = os.fork()
+    if child == 0:
+        rc = 1
         try:
-            ok, msg = receipt.verify(args.receipt_db)
-            print(f"supervisor: receipt {msg} ({'OK' if ok else 'BROKEN'})", file=sys.stderr)
+            sock.close()
+            rc = run_vmm(args, boot_args, jailer_argv(args, jail_id),
+                         os.path.join(root, JAIL_API_SOCK.lstrip("/")),
+                         "/vmlinux.bin", "/rootfs.ext4", JAIL_UDS,
+                         pid_file=os.path.join(root, f"{exec_name}.pid"))
         except Exception as e:
-            print(f"supervisor: receipt check failed: {e}", file=sys.stderr)
-        return 0
+            print(f"supervisor: jailed launch failed: {e}", file=sys.stderr)
+            dump_serial_tail(args.serial_log)
+        finally:
+            teardown_jail(jail_dir, exec_name, jail_id)
+            os._exit(rc)
+    drop_privileges(owner_uid, owner_gid)
+    open(args.events_log, "wb").close()
+    stop_event = threading.Event()
+    listener_thread = start_listener(args, sock, listen_path, stop_event)
+    _, status = os.waitpid(child, 0)
+    rc = os.waitstatus_to_exitcode(status)
+    finish(args, listener_thread, stop_event, rc)
+    return 0 if rc == 0 else 1
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--firecracker", required=True)
+    ap.add_argument("--kernel", required=True)
+    ap.add_argument("--rootfs", required=True)
+    ap.add_argument("--serial-log", required=True)
+    ap.add_argument("--events-log", required=True)
+    ap.add_argument("--receipt-db", required=True)
+    ap.add_argument("--init-target", default="/init", choices=["/init", "/init-trip"])
+    ap.add_argument("--run-timeout", type=float, default=60.0)
+    ap.add_argument("--jailer", help="run under this jailer binary (needs sudo)")
+    ap.add_argument("--jail-uid", type=int)
+    ap.add_argument("--jail-gid", type=int)
+    ap.add_argument("--chroot-base", default="/srv/jailer")
+    args = ap.parse_args()
+
+    boot_args = ("console=ttyS0 reboot=k panic=1 pci=off "
+                 "i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd "
+                 f"init={args.init_target}")
+    if args.jailer:
+        return main_jailed(args, boot_args)
+
+    open(args.events_log, "wb").close()
+    with tempfile.TemporaryDirectory(prefix="fc-supervisor-05-") as tmp:
+        api_sock = os.path.join(tmp, "fc.sock")
+        uds_prefix = os.path.join(tmp, "fc-vsock.sock")
+        uds_listen = uds_prefix + "_5000"
+        stop_event = threading.Event()
+        listener_thread = start_listener(args, bind_listener(uds_listen), uds_listen, stop_event)
+        rc = run_vmm(args, boot_args, [args.firecracker, "--api-sock", api_sock],
+                     api_sock, args.kernel, args.rootfs, uds_prefix)
+        finish(args, listener_thread, stop_event, rc)
+        return 0 if rc == 0 else 1   # a timeout or VMM failure must not look like success
 
 if __name__ == "__main__":
     sys.exit(main())

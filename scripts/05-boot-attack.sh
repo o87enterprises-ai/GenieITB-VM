@@ -35,10 +35,23 @@ INIT_TARGET=/init
 [[ "$MODE" == "kill" ]] && INIT_TARGET=/init-trip
 
 echo "==> Starting 05 supervisor ($MODE run, init=$INIT_TARGET, timeout 60s)"
-python3 "$ROOT/scripts/05-supervisor.py" \
+# EXT-03: JAIL_USER=<dedicated account> runs the VMM under the jailer. Only the supervisor
+# is started with sudo, and it drops to this user for everything that handles guest data.
+SUPERVISOR=(python3)
+JAIL_ARGS=()
+if [[ -n "${JAIL_USER:-}" ]]; then
+  JAIL_UID="$(id -u "$JAIL_USER")" || { echo "no such user: $JAIL_USER" >&2; exit 2; }
+  JAIL_GID="$(id -g "$JAIL_USER")"
+  [[ "$JAIL_UID" -ne 0 ]] || { echo "JAIL_USER must not be root" >&2; exit 2; }
+  SUPERVISOR=(sudo python3 -B)
+  JAIL_ARGS=(--jailer "$ROOT/bin/jailer" --jail-uid "$JAIL_UID" --jail-gid "$JAIL_GID")
+  : > "$SERIAL"; : > "$EVENTS"   # keep the logs owned by this user, not root
+fi
+"${SUPERVISOR[@]}" "$ROOT/scripts/05-supervisor.py" \
   --firecracker "$FC" --kernel "$KERNEL" --rootfs "$ROOTFS" \
   --serial-log "$SERIAL" --events-log "$EVENTS" --receipt-db "$RECEIPT" \
-  --init-target "$INIT_TARGET" --run-timeout 60
+  --init-target "$INIT_TARGET" --run-timeout 60 "${JAIL_ARGS[@]}"
+SUPERVISOR_RC=$?
 echo
 
 echo "==> Normalizing serial log"
@@ -57,6 +70,12 @@ rm -f "$RECEIPT-wal" "$RECEIPT-shm"
 fail=0
 pass() { echo "PASS: $*"; }
 bad()  { echo "FAIL: $*"; fail=1; }
+
+if [[ "$SUPERVISOR_RC" -eq 0 ]]; then
+  pass "VMM exited cleanly"
+else
+  bad "supervisor exited $SUPERVISOR_RC (VMM timeout or failure)"
+fi
 
 if "$BROKER" verify --db "$RECEIPT" > /tmp/broker-verify-05.out 2>&1 \
    && grep -q '^OK: every record is in the chain and unchanged$' /tmp/broker-verify-05.out; then

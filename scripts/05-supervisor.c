@@ -141,7 +141,10 @@ static void poweroff_clean(void) {
     umount2("/tmp",  MNT_DETACH);
     umount2("/sys",  MNT_DETACH);
     umount2("/proc", MNT_DETACH);
-    reboot(RB_POWER_OFF);
+    /* RB_AUTOBOOT, not RB_POWER_OFF: with reboot=k this resets through the i8042, which is
+       what makes Firecracker exit. RB_POWER_OFF only halts the vCPU, leaving the VMM running
+       until the host-side timeout kills it. */
+    reboot(RB_AUTOBOOT);
     for (;;) pause();
 }
 

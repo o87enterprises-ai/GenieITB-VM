@@ -148,6 +148,7 @@ def dump_serial_tail(serial_path, n=40):
 # --- EXT-03: jailed launch --------------------------------------------------
 JAIL_MEMORY_MAX = 384 * 1024 * 1024   # 256 MiB guest + VMM overhead
 JAIL_API_SOCK, JAIL_UDS = "/api.sock", "/fc-vsock.sock"
+EXIT_STOPPED = 3   # the caller asked for the VM to be stopped (tripwire)
 
 def prepare_jail(args, jail_id):
     """Create the chroot and copy boot artifacts in. Runs as root."""
@@ -227,10 +228,12 @@ def check_confined(pid, jail_uid):
     print(f"supervisor: JAIL CONFIRMED uid={uid[0]} nspid={'/'.join(nspid)} "
           f"cgroup={cg} memory.max={mem}", file=sys.stderr)
 
-def run_vmm(args, boot_args, argv, api_sock, kernel, rootfs, uds_path, pid_file=None):
+def run_vmm(args, boot_args, argv, api_sock, kernel, rootfs, uds_path, pid_file=None,
+            stop=None, after_vsock=None):
     """Launch the VMM, configure it, and wait for it. Returns its exit code."""
     serial_f = open(args.serial_log, "wb")
     proc = None; rc = None; vm_pid = None
+    stopped = lambda: stop is not None and stop.is_set()
     try:
         proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL,
                                 stdout=serial_f, stderr=subprocess.STDOUT)
@@ -242,12 +245,20 @@ def run_vmm(args, boot_args, argv, api_sock, kernel, rootfs, uds_path, pid_file=
         api_put(api_sock, "/machine-config", {
             "vcpu_count": 1, "mem_size_mib": 256, "smt": False})
         api_put(api_sock, "/vsock", {"guest_cid": 3, "uds_path": uds_path})
+        if after_vsock is not None:
+            after_vsock()
         assert_no_network(api_sock)
         api_put(api_sock, "/actions", {"action_type": "InstanceStart"})
         if pid_file is None:
-            try:
-                rc = proc.wait(timeout=args.run_timeout)
-            except subprocess.TimeoutExpired:
+            deadline = time.time() + args.run_timeout
+            while proc.poll() is None and time.time() < deadline and not stopped():
+                time.sleep(0.02)
+            if proc.poll() is not None:
+                rc = proc.returncode
+            elif stopped():
+                proc.kill(); proc.wait()
+                rc = EXIT_STOPPED
+            else:
                 print(f"supervisor: Firecracker did not exit within {args.run_timeout}s",
                       file=sys.stderr)
                 dump_serial_tail(args.serial_log)
@@ -265,9 +276,11 @@ def run_vmm(args, boot_args, argv, api_sock, kernel, rootfs, uds_path, pid_file=
                 vm_pid = int(f.read().strip())
             check_confined(vm_pid, args.jail_uid)
             deadline = time.time() + args.run_timeout
-            while vm_alive(vm_pid) and time.time() < deadline:
-                time.sleep(0.1)
-            if vm_alive(vm_pid):
+            while vm_alive(vm_pid) and time.time() < deadline and not stopped():
+                time.sleep(0.02)
+            if stopped() and vm_alive(vm_pid):
+                rc = EXIT_STOPPED
+            elif vm_alive(vm_pid):
                 print(f"supervisor: Firecracker did not exit within {args.run_timeout}s",
                       file=sys.stderr)
                 dump_serial_tail(args.serial_log)

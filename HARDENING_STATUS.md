@@ -1,6 +1,6 @@
 # Hardening status (branch `hardening/ext-review`, base `d04e988`)
 
-Date: 2026-11-08. Host: WSL2 x86_64, **no root**. Nothing here has been independently pentested.
+Date: 2026-11-08. Host: WSL2 x86_64. Nothing here has been independently pentested.
 
 | ID | State | Evidence | Not done / caveat |
 |---|---|---|---|
@@ -9,9 +9,10 @@ Date: 2026-11-08. Host: WSL2 x86_64, **no root**. Nothing here has been independ
 | EXT-04 Receipt anchor | **Done in code** | `scripts/anchor.py`: truncation, same-length forge, tampered anchor log, loose key perms all rejected (plain `verify` accepted the forge); SS1 run script requires it by default; old receipts archived not deleted | Protection exists only if key + anchor log sit behind a different privilege boundary than the receipt writer. Use `ANCHOR_PUSH_CMD` to a remote append-only store |
 | EXT-01 NIC guard | **Done (guard only)** | Supervisor aborts on any NIC/MMDS in `/vm/config` before `InstanceStart`; unit-tested with stubbed configs | Not tested against a real NIC (needs tap/root). The perimeter now lives in `../GenieITB-Perimeter` and needs no NIC: keep this guard. It has not been pentested or run together with the jail |
 | EXT-07 Guest kernel | **Done** | `scripts/audit-kernel-config.sh` PASS; hardened kernel promoted to `kernel/vmlinux.bin` (previous saved as `kernel/vmlinux-prehardening.bin.bak`); boot log shows `capability,landlock,lockdown,yama`; SS1 default+kill PASS | No process for tracking 6.1 stable updates |
-| EXT-06 Rootfs | **Done** | `scripts/build-minimal-rootfs.sh` builds a 16 MiB image from static binaries only (no distro, shell, or SSH), without root; now the run-script default; `audit-rootfs.sh` PASS without `ALLOW_EOL`; SS1 default+kill PASS | The image is gitignored: build it locally. Guest agents still run as root inside it (see the sandbox review row) |
+| EXT-06 Rootfs | **Done** | `scripts/build-minimal-rootfs.sh` builds a 16 MiB image from static binaries only (no distro, shell, or SSH), without root; now the run-script default; `audit-rootfs.sh` PASS without `ALLOW_EOL`; SS1 default+kill PASS | The image is gitignored: build it locally |
 | EXT-03 Jailer | **Done on WSL2** | `JAIL_USER=fcjail ./scripts/05-boot-attack.sh`: VMM under jailer with dedicated uid, chroot, PID namespace, cgroup v2 limits. The supervisor checks these on the live VMM and aborts on mismatch. Only launch/teardown keep root; guest-data handling drops to the invoking user. SS1 default+kill PASS, clean exit, no leftover jail or cgroup | Not the default: unjailed unless `JAIL_USER` is set. Scripts started via sudo live in a user-writable repo; install them root-owned for any deployment. Not yet tested on a physical Linux host |
 | EXT-08 Host posture | **Not done** | n/a | Dedicated host, separate accounts, read-only artifacts: operational |
+| Guest agents | **Non-root** | Each agent runs under its own unprivileged uid and refuses to start if it cannot drop. A control build with Landlock disabled let the denied write succeed, so the DENY comes from Landlock, not file permissions. SS1 default+kill PASS | PID 1 supervisor remains root inside the guest |
 | Guest sandbox / control-channel review | **Not done** | n/a | Still needs a human reviewer (see `SECURITY_REVIEW.md` §2) |
 
 ## Run it

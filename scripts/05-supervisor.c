@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <grp.h>
 #include <poll.h>
 #include <signal.h>
 #include <sys/socket.h>
@@ -23,6 +24,8 @@
 #define MAX_AGENTS       2
 #define LINE_MAX         1024
 #define IDLE_TIMEOUT_MS  30000
+#define DOC_AGENT_UID    1001   /* each agent gets its own unprivileged identity */
+#define SHELL_AGENT_UID  1002
 
 static int   denials;
 static int   tripwire = 4;
@@ -113,7 +116,7 @@ static void send_and_ack(const char *line) {
     if (!ok) { dprintf(2, "send_and_ack: no ack for: %s\n", line); _exit(2); }
 }
 
-static pid_t spawn(const char *path, int *ctlfd) {
+static pid_t spawn(const char *path, uid_t uid, int *ctlfd) {
     int sv[2];
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, sv) < 0) { perror("socketpair"); _exit(2); }
     pid_t p = fork();
@@ -122,6 +125,10 @@ static pid_t spawn(const char *path, int *ctlfd) {
         close(sv[0]);
         if (dup2(sv[1], 3) < 0) { perror("dup2"); _exit(127); }
         if (sv[1] != 3) close(sv[1]);
+        /* Agents never hold root or capabilities. Refuse to run one that could not drop. */
+        if (setgroups(0, NULL) < 0 || setresgid(uid, uid, uid) < 0 || setresuid(uid, uid, uid) < 0) {
+            perror("drop privileges"); _exit(127);
+        }
         execl(path, path, (char *)NULL);
         perror("execl"); _exit(127);
     }
@@ -168,6 +175,8 @@ int main(int argc, char **argv) {
     if (mount("tmpfs", "/tmp",  "tmpfs", 0, "mode=1777,size=16m") < 0)
         dprintf(2, "mount tmpfs errno=%d\n", errno);
     mkdir("/tmp/doc", 0755);
+    if (chown("/tmp/doc", DOC_AGENT_UID, DOC_AGENT_UID) < 0)
+        dprintf(2, "chown /tmp/doc errno=%d\n", errno);
     /* Pre-stage a decoy /tmp/payload.sh. Landlock denies doc_agent the write
        (that's the DENY we record), so the file would not otherwise exist and
        shell_agent's exec attempt would fail ENOENT instead of EACCES. Staging
@@ -177,6 +186,10 @@ int main(int argc, char **argv) {
         if (pfd >= 0) {
             const char *stub = "#!/bin/sh\necho pwned-from-payload\n";
             ssize_t _w = write(pfd, stub, strlen(stub)); (void)_w;
+            /* Owned by doc_agent so file permissions allow the write and Landlock is
+               what denies it. Otherwise the DENY would prove nothing. */
+            if (fchown(pfd, DOC_AGENT_UID, DOC_AGENT_UID) < 0)
+                dprintf(2, "chown payload errno=%d\n", errno);
             close(pfd);
         } else {
             dprintf(2, "pre-stage payload.sh errno=%d\n", errno);
@@ -193,8 +206,8 @@ int main(int argc, char **argv) {
     send_and_ack("HELLO supervisor");
 
     int ctl[MAX_AGENTS];
-    kids[0] = spawn("/05-doc_agent",   &ctl[0]);
-    kids[1] = spawn("/05-shell_agent", &ctl[1]);
+    kids[0] = spawn("/05-doc_agent",   DOC_AGENT_UID,   &ctl[0]);
+    kids[1] = spawn("/05-shell_agent", SHELL_AGENT_UID, &ctl[1]);
 
     struct pollfd pf[MAX_AGENTS] = {
         { ctl[0], POLLIN, 0 },

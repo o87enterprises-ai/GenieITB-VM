@@ -36,13 +36,17 @@ class Tripwire:
         if text.startswith(BENIGN): return
         with self.lock:
             self.denials += 1
-            if self.fired or (self.denials < self.threshold and not text.startswith("TRIPWIRE ")):
-                return
-            self.fired = True
             count = self.denials
-        try:
+        if count >= self.threshold or text.startswith("TRIPWIRE "):
             # The guest's text is not copied here: this chain holds only host-derived facts.
-            receipt.append_run_event(self.db, "fleet", f"TRIPWIRE denials={count} from={short} stopping fleet")
+            self.fire(f"TRIPWIRE denials={count} from={short} stopping fleet")
+
+    def fire(self, detail):
+        with self.lock:
+            if self.fired: return
+            self.fired = True
+        try:
+            receipt.append_run_event(self.db, "fleet", detail)
         except Exception as e:
             print(f"fleet: RECEIPT WRITE FAILED: {e}", file=sys.stderr)
         finally:
@@ -51,6 +55,7 @@ class Tripwire:
 class VM:
     def __init__(self, args, short, init, index):
         self.short, self.init, self.jail_dir, self.pid_file = short, init, None, None
+        self.after_vsock = None   # runs once Firecracker has created the vsock socket
         self.args = argparse.Namespace(**vars(args))
         prefix = f"{args.log_prefix}-{short}"
         self.args.serial_log, self.args.events_log, self.args.receipt_db = (
@@ -85,7 +90,8 @@ def run_child(vm, vms, read_fd, write_fd):
         os.close(write_fd)
         for v in vms: v.sock.close()
         rc = sup.run_vmm(vm.args, sup.kernel_cmdline(vm.init), vm.argv, vm.api, vm.kernel, vm.rootfs,
-                         vm.uds, pid_file=vm.pid_file, stop=PipeStop(read_fd))
+                         vm.uds, pid_file=vm.pid_file, stop=PipeStop(read_fd),
+                         after_vsock=vm.after_vsock)
     except Exception as e:
         print(f"fleet: {vm.short}: launch failed: {e}", file=sys.stderr)
         sup.dump_serial_tail(vm.args.serial_log)
@@ -93,7 +99,9 @@ def run_child(vm, vms, read_fd, write_fd):
         vm.teardown()
         os._exit(rc)
 
-def run_fleet(args, vms, drop=None):
+def run_fleet(args, vms, drop=None, started=None, stopping=None):
+    """started(trip) runs once the listeners are up. stopping() runs after every VM has
+    exited and returns False if the run must fail."""
     read_fd, write_fd = os.pipe()
     for vm in vms:   # fork before any listener thread exists
         vm.pid = os.fork()
@@ -110,6 +118,7 @@ def run_fleet(args, vms, drop=None):
         vm.stop_event = threading.Event()
         vm.thread = sup.start_listener(vm.args, vm.sock, vm.listen, vm.stop_event,
                                        on_line=lambda text, s=vm.short: trip.line(s, text))
+    if started: started(trip)
     for vm in vms:
         _, status = os.waitpid(vm.pid, 0)
         vm.rc = os.waitstatus_to_exitcode(status)
@@ -122,6 +131,7 @@ def run_fleet(args, vms, drop=None):
         receipt.append_run_event(fleet_db, "fleet", f"VM {vm.short} rc={vm.rc} chain={'OK' if ok else 'BROKEN'} {msg}")
         print(f"fleet: {vm.short} rc={vm.rc}", file=sys.stderr)
         good = good and ok and vm.rc in allowed
+    if stopping: good = stopping() and good
     fleet_ok, msg = receipt.verify(fleet_db)
     print(f"fleet: fleet chain {msg} ({'OK' if fleet_ok else 'BROKEN'}) tripped={trip.fired}", file=sys.stderr)
     if not good or not fleet_ok: return 1

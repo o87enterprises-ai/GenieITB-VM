@@ -1,0 +1,14 @@
+MonkeyITM-VM broker log
+exported 2026-11-09T07:58:19Z
+
+intents: 0   allow: 0   deny: 0   awaiting approval: 0
+escalations: 0 allowed by a human, 0 denied by a human, 0 pending, 0 denied unattended
+
+RUN FLEET  2026-11-09T07:58:17Z  START tripwire=3 vms=doc,shell
+
+RUN FLEET  2026-11-09T07:58:17Z  TRIPWIRE denials=3 from=doc stopping fleet
+
+RUN FLEET  2026-11-09T07:58:18Z  VM doc rc=3 chain=OK 8 entries, head 306540ba8432a15a52ae93232492a28d734caf4c3ab9a6011d90b5dd778b64e7
+
+RUN FLEET  2026-11-09T07:58:19Z  VM shell rc=3 chain=OK 7 entries, head 51ce6a8af826af46df1be9f22f10ddf67e600e03588bc7d23c25adce5cf33357
+

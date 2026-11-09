@@ -17,4 +17,4 @@ ea5e7d5cf494a8c4ba043259812fc018b44880d70bcbbfc4d57d2760631b1cd6  reference-vmli
 1ced8ad348c896bb0cc78d76ea336e41b1310c6d4fcb2ddcdd8217d964b409c4  guest-agent/agent  -
 afdd378cb008c18544bef0153800ceec9d711a1f4256f53e7c61839f022a5368  broker  -
 edaec9081d5d111f63c52f339a54e6be1157425e561c3ab7ca09df3238f26490  kernel/vmlinux.bin  -
-d8cedb982b3285225de03a64b3c7415fc2b44942f9301dcbcd9ed2569089f632  rootfs/05-rootfs-minimal.ext4  -
+e123bd1684946fcd96ca8728acc2ae7ade68a8fb6b8e1ae2d6021b3954fb6970  rootfs/05-rootfs-minimal.ext4  -

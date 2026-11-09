@@ -1,0 +1,7 @@
+LSM capability,landlock,lockdown,yama
+HELLO supervisor
+HELLO shell_agent
+TRY shell_agent execve /tmp/payload.sh
+DENY shell_agent execve /tmp/payload.sh errno=13
+TRY shell_agent execve /bin/true
+DONE supervisor

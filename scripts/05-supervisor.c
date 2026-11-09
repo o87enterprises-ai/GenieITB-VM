@@ -32,6 +32,8 @@ static int   tripwire = 4;
 static pid_t kids[MAX_AGENTS];
 
 static const char *const agent_names[MAX_AGENTS] = { "doc_agent", "shell_agent" };
+static const char *const agent_paths[MAX_AGENTS] = { "/05-doc_agent", "/05-shell_agent" };
+static const uid_t       agent_uids[MAX_AGENTS]  = { DOC_AGENT_UID, SHELL_AGENT_UID };
 
 enum line_class { LINE_INVALID, LINE_BENIGN, LINE_DENIAL };
 
@@ -253,17 +255,22 @@ int main(int argc, char **argv) {
     send_and_ack(lsm_line);
     send_and_ack("HELLO supervisor");
 
-    int ctl[MAX_AGENTS];
-    kids[0] = spawn("/05-doc_agent",   DOC_AGENT_UID,   &ctl[0]);
-    kids[1] = spawn("/05-shell_agent", SHELL_AGENT_UID, &ctl[1]);
-
-    struct pollfd pf[MAX_AGENTS] = {
-        { ctl[0], POLLIN, 0 },
-        { ctl[1], POLLIN, 0 },
-    };
+    /* argv[2] names the one agent this VM runs. Without it, both run in this guest. */
+    const char *only = argc > 2 ? argv[2] : NULL;
+    struct pollfd pf[MAX_AGENTS];
     char   buf[MAX_AGENTS][LINE_MAX];
     size_t len[MAX_AGENTS] = { 0, 0 };
-    int    live = MAX_AGENTS;
+    int    live = 0;
+    for (int i = 0; i < MAX_AGENTS; i++) {
+        pf[i] = (struct pollfd){ .fd = -1, .events = POLLIN };   /* poll ignores fd -1 */
+        if (only && strcmp(only, agent_names[i])) continue;
+        kids[i] = spawn(agent_paths[i], agent_uids[i], &pf[i].fd);
+        live++;
+    }
+    if (!live) {   /* a misbuilt image must not look like a clean run with nothing to report */
+        send_and_ack("ERROR supervisor unknown agent");
+        poweroff_clean();
+    }
 
     while (live) {
         int pr = poll(pf, MAX_AGENTS, IDLE_TIMEOUT_MS);

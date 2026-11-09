@@ -87,7 +87,9 @@ def bind_listener(listen_path, owner=None):
 
 MAX_LINES_PER_RUN = 4096   # GEN-10: a run that exceeds this has its receipts refused
 
-def run_vsock_listener(sock, listen_path, events_path, receipt_db, ready_event, stop_event):
+def run_vsock_listener(sock, listen_path, events_path, receipt_db, ready_event, stop_event,
+                       on_line=None):
+    """on_line, if given, is called with each line after it has been recorded."""
     ready_event.set()
     lines = 0
     try:
@@ -133,6 +135,7 @@ def run_vsock_listener(sock, listen_path, events_path, receipt_db, ready_event, 
                     except Exception as e:
                         print(f"supervisor: RECEIPT WRITE FAILED on truncation: {e}",
                               file=sys.stderr)
+                    if on_line: on_line(marker)
                     continue  # no ack
                 line = buf.split(b"\n", 1)[0].decode("utf-8", "replace")
                 with open(events_path, "ab") as f:
@@ -145,6 +148,7 @@ def run_vsock_listener(sock, listen_path, events_path, receipt_db, ready_event, 
                     continue
                 try: conn.sendall(b"ack\n")
                 except OSError: pass
+                if on_line: on_line(line)
                 if line == "HALT supervisor":
                     stop_event.set()
                     break
@@ -267,7 +271,8 @@ def check_confined(pid, jail_uid):
 def run_vmm(args, boot_args, argv, api_sock, kernel, rootfs, uds_path, pid_file=None,
             stop=None, after_vsock=None):
     """Launch the VMM, configure it, and wait for it. Returns its exit code."""
-    serial_f = open(args.serial_log, "wb")
+    # O_NOFOLLOW: in jail mode this runs as root on a path inside the user's log directory.
+    serial_f = os.fdopen(os.open(args.serial_log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644), "wb")
     proc = None; rc = None; vm_pid = None
     stopped = lambda: stop is not None and stop.is_set()
     try:
@@ -342,10 +347,10 @@ def finish(args, listener_thread, stop_event, rc):
         print(f"supervisor: receipt check failed: {e}", file=sys.stderr)
         return False
 
-def start_listener(args, sock, listen_path, stop_event):
+def start_listener(args, sock, listen_path, stop_event, on_line=None):
     ready_event = threading.Event()
     t = threading.Thread(target=run_vsock_listener,
-        args=(sock, listen_path, args.events_log, args.receipt_db, ready_event, stop_event),
+        args=(sock, listen_path, args.events_log, args.receipt_db, ready_event, stop_event, on_line),
         daemon=True)
     t.start()
     if not ready_event.wait(timeout=2.0):
@@ -389,6 +394,11 @@ def main_jailed(args, boot_args):
     ok = finish(args, listener_thread, stop_event, rc)
     return 0 if rc == 0 and ok else 1
 
+def kernel_cmdline(init_target):
+    return ("console=ttyS0 reboot=k panic=1 pci=off "
+            "i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd "
+            f"init={init_target}")
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--firecracker", required=True)
@@ -405,9 +415,7 @@ def main():
     ap.add_argument("--chroot-base", default="/srv/jailer")
     args = ap.parse_args()
 
-    boot_args = ("console=ttyS0 reboot=k panic=1 pci=off "
-                 "i8042.noaux i8042.nomux i8042.nopnp i8042.dumbkbd "
-                 f"init={args.init_target}")
+    boot_args = kernel_cmdline(args.init_target)
     if args.jailer:
         return main_jailed(args, boot_args)
 

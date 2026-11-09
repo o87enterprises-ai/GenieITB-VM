@@ -1,0 +1,8 @@
+LSM capability,landlock,lockdown,yama
+HELLO supervisor
+HELLO doc_agent
+ALLOW doc_agent write /tmp/doc/benign.txt
+DENY doc_agent write /tmp/payload.sh errno=13
+DENY doc_agent execve /tmp/payload.sh EACCES
+DONE doc_agent
+DONE supervisor

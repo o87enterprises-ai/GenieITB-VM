@@ -19,10 +19,12 @@ chmod 1777 "$T/tmp"
 "${CC[@]}" -o "$T/05-shell_agent" "$S/05-shell_agent.c"
 "${CC[@]}" '-DTRIPWIRE="4"' -o "$T/init"      "$S/05-init.c"
 "${CC[@]}" '-DTRIPWIRE="3"' -o "$T/init-trip" "$S/05-init.c"
+"${CC[@]}" '-DTRIPWIRE="4"' '-DAGENT="doc_agent"'   -o "$T/init-doc"   "$S/05-init.c"
+"${CC[@]}" '-DTRIPWIRE="4"' '-DAGENT="shell_agent"' -o "$T/init-shell" "$S/05-init.c"
 # shell_agent's allowed-exec control target.
 echo 'int main(void){return 0;}' > "$WORK/true.c"
 "${CC[@]}" -o "$T/bin/true" "$WORK/true.c"
-chmod 0755 "$T"/05-* "$T"/init "$T"/init-trip "$T"/bin/true
+chmod 0755 "$T"/05-* "$T"/init "$T"/init-trip "$T"/init-doc "$T"/init-shell "$T"/bin/true
 
 rm -f "$OUT"
 fakeroot -- bash -c "chown -R 0:0 '$T' && mke2fs -q -t ext4 -m 0 -L genie-min -d '$T' '$OUT' 16M"

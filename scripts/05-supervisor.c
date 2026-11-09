@@ -31,18 +31,30 @@ static int   denials;
 static int   tripwire = 4;
 static pid_t kids[MAX_AGENTS];
 
-/* Review F5: count denials by a positive allow-list of non-denial prefixes
-   rather than by matching "DENY" only. An agent cannot dodge the tripwire by
-   reporting a denied operation under a different prefix (e.g. "ERROR"); any
-   line that is not a known benign event counts. "TRY" is the pre-attempt
-   marker (the result arrives as a separate DENY/ALLOW line) and must NOT
-   count, or each denied exec would be tallied twice and the wire would trip
-   one denial early. */
-static int is_non_denial(const char *s) {
-    return !strncmp(s, "HELLO", 5) || !strncmp(s, "ALLOW", 5)
-        || !strncmp(s, "DONE",  4) || !strncmp(s, "LSM",   3)
-        || !strncmp(s, "TRY",   3) || !strncmp(s, "TIMEOUT", 7)
-        || !strncmp(s, "TRIPWIRE", 8) || !strncmp(s, "HALT", 4);
+static const char *const agent_names[MAX_AGENTS] = { "doc_agent", "shell_agent" };
+
+enum line_class { LINE_INVALID, LINE_BENIGN, LINE_DENIAL };
+
+/* Agent lines are untrusted input (GEN-03/04). A line must be printable and read
+   `<VERB> <this agent's own name>[ ...]`. An agent therefore cannot speak as the
+   supervisor or the other agent, and a line cannot be dressed up as benign with a
+   leading word. TRY is the pre-attempt marker: its result arrives separately. */
+static enum line_class classify_line(const char *agent, const char *s) {
+    for (const char *p = s; *p; p++)
+        if ((unsigned char)*p < 0x20 || (unsigned char)*p > 0x7e) return LINE_INVALID;
+    static const struct { const char *verb; enum line_class c; } verbs[] = {
+        { "HELLO", LINE_BENIGN }, { "ALLOW", LINE_BENIGN }, { "TRY", LINE_BENIGN },
+        { "DONE",  LINE_BENIGN }, { "DENY",  LINE_DENIAL }, { "ERROR", LINE_DENIAL },
+    };
+    size_t name = strlen(agent);
+    for (size_t i = 0; i < sizeof verbs / sizeof verbs[0]; i++) {
+        size_t v = strlen(verbs[i].verb);
+        if (strncmp(s, verbs[i].verb, v) || s[v] != ' ') continue;
+        const char *who = s + v + 1;
+        if (strncmp(who, agent, name) || (who[name] != ' ' && who[name] != 0)) return LINE_INVALID;
+        return verbs[i].c;
+    }
+    return LINE_INVALID;
 }
 
 static void read_first_line(const char *path, char *buf, size_t buflen) {
@@ -129,6 +141,8 @@ static pid_t spawn(const char *path, uid_t uid, int *ctlfd) {
         if (setgroups(0, NULL) < 0 || setresgid(uid, uid, uid) < 0 || setresuid(uid, uid, uid) < 0) {
             perror("drop privileges"); _exit(127);
         }
+        /* Agents talk only over fd 3, so they do not inherit the console. */
+        close(0); close(1); close(2);
         execl(path, path, (char *)NULL);
         perror("execl"); _exit(127);
     }
@@ -143,6 +157,30 @@ static void kill_group(void) {
     }
 }
 
+static void record_denial(void);
+
+/* After a control channel closes: the wait status comes from the kernel, so unlike the
+   agent's own reports it cannot be faked. A seccomp kill counts as a denial. */
+static void reap_agent(int i) {
+    char m[128];
+    int st = 0, tries = 0;
+    pid_t r;
+    while ((r = waitpid(kids[i], &st, WNOHANG)) == 0 && tries++ < 50) usleep(2000);
+    if (r == 0) {   /* closed its channel but is still running: not allowed */
+        kill(kids[i], SIGKILL);
+        r = waitpid(kids[i], &st, 0);
+        snprintf(m, sizeof m, "ENFORCED %s closed its channel and was killed", agent_names[i]);
+    } else if (r > 0 && WIFSIGNALED(st)) {
+        snprintf(m, sizeof m, "ENFORCED %s killed by signal=%d", agent_names[i], WTERMSIG(st));
+    } else {
+        kids[i] = 0;
+        return;
+    }
+    kids[i] = 0;
+    send_and_ack(m);
+    record_denial();
+}
+
 static void poweroff_clean(void) {
     sync();
     umount2("/tmp",  MNT_DETACH);
@@ -153,6 +191,16 @@ static void poweroff_clean(void) {
        until the host-side timeout kills it. */
     reboot(RB_AUTOBOOT);
     for (;;) pause();
+}
+
+static void record_denial(void) {
+    if (++denials < tripwire) return;
+    char tw[128];
+    snprintf(tw, sizeof tw, "TRIPWIRE denials>=%d killing group", tripwire);
+    send_and_ack(tw);
+    kill_group();
+    send_and_ack("HALT supervisor");
+    poweroff_clean();
 }
 
 int main(int argc, char **argv) {
@@ -232,25 +280,32 @@ int main(int argc, char **argv) {
         for (int i = 0; i < MAX_AGENTS; i++) {
             if (pf[i].fd < 0) continue;
             if (!(pf[i].revents & (POLLIN | POLLHUP | POLLERR))) continue;
+            if (len[i] >= sizeof buf[i] - 1) {   /* a full buffer with no newline */
+                char m[96];
+                snprintf(m, sizeof m, "BADLINE from %s oversized", agent_names[i]);
+                send_and_ack(m);
+                close(pf[i].fd); pf[i].fd = -1; live--;
+                kill(kids[i], SIGKILL);
+                reap_agent(i);
+                record_denial();
+                continue;
+            }
             ssize_t r = read(pf[i].fd, buf[i] + len[i], sizeof buf[i] - len[i] - 1);
-            if (r <= 0) { close(pf[i].fd); pf[i].fd = -1; live--; continue; }
+            if (r <= 0) { close(pf[i].fd); pf[i].fd = -1; live--; reap_agent(i); continue; }
             len[i] += r;
             buf[i][len[i]] = 0;
             char *nl;
             while ((nl = memchr(buf[i], '\n', len[i]))) {
                 *nl = 0;
-                send_and_ack(buf[i]);
-                if (!is_non_denial(buf[i])) {
-                    denials++;
-                    if (denials >= tripwire) {
-                        char tw[128];
-                        snprintf(tw, sizeof tw, "TRIPWIRE denials>=%d killing group", tripwire);
-                        send_and_ack(tw);
-                        kill_group();
-                        send_and_ack("HALT supervisor");
-                        poweroff_clean();
-                    }
+                enum line_class c = classify_line(agent_names[i], buf[i]);
+                if (c == LINE_INVALID) {
+                    char m[96];   /* the content is untrusted, so it is not forwarded */
+                    snprintf(m, sizeof m, "BADLINE from %s", agent_names[i]);
+                    send_and_ack(m);
+                } else {
+                    send_and_ack(buf[i]);
                 }
+                if (c != LINE_BENIGN) record_denial();
                 char ok[4] = "OK\n";
                 if (write(pf[i].fd, ok, 3) != 3) { /* agent already gone */ }
                 size_t consumed = (size_t)(nl - buf[i]) + 1;

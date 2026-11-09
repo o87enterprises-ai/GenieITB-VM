@@ -13,7 +13,7 @@ Date: 2026-11-08. Host: WSL2 x86_64. Nothing here has been independently pentest
 | EXT-03 Jailer | **Done on WSL2** | `JAIL_USER=fcjail ./scripts/05-boot-attack.sh`: VMM under jailer with dedicated uid, chroot, PID namespace, cgroup v2 limits. The supervisor checks these on the live VMM and aborts on mismatch. Only launch/teardown keep root; guest-data handling drops to the invoking user. SS1 default+kill PASS, clean exit, no leftover jail or cgroup | Not the default: unjailed unless `JAIL_USER` is set. Scripts started via sudo live in a user-writable repo; install them root-owned for any deployment. Not yet tested on a physical Linux host |
 | EXT-08 Host posture | **Not done** | n/a | Dedicated host, separate accounts, read-only artifacts: operational |
 | Guest agents | **Non-root** | Each agent runs under its own unprivileged uid and refuses to start if it cannot drop. A control build with Landlock disabled let the denied write succeed, so the DENY comes from Landlock, not file permissions. SS1 default+kill PASS | PID 1 supervisor remains root inside the guest |
-| Guest sandbox / control-channel review | **Not done** | n/a | Still needs a human reviewer (see `SECURITY_REVIEW.md` §2) |
+| Guest sandbox / control channel (GEN-01..07) | **Fixed; re-review needed** | Agents use a seccomp allowlist and full-rights Landlock and exit if either fails to install; agents cannot open sockets; supervisor enforces a per-agent line grammar and counts kernel seccomp kills. `scripts/test-sandbox.sh` and `scripts/test-records.sh` pass in a real guest; a control run with the sandbox off fails them | A compromised agent can still stay silent about denials Landlock returns to it. PID 1 supervisor remains root. Reviewer has not seen this code |
 
 ## Run it
 

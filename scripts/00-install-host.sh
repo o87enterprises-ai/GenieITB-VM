@@ -55,6 +55,8 @@ if [ ! -x "$ROOT/bin/firecracker" ]; then
   rm -rf "$TMP"
 fi
 
+# GEN-13: also covers binaries that were already here and skipped the download.
+"$ROOT/scripts/verify-inputs.sh" --installed
 "$ROOT/bin/firecracker" --version
 
 # --- 5. Reference kernel (Firecracker CI quickstart kernel) ----------------

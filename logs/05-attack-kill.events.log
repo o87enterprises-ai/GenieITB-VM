@@ -1,4 +1,4 @@
-LSM capability,landlock
+LSM capability,landlock,lockdown,yama
 HELLO supervisor
 HELLO shell_agent
 HELLO doc_agent

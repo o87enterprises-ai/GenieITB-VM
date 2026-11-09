@@ -9,7 +9,7 @@ The guest refuses to proceed without an ack (receipt not committed).
 Guest powers itself off after DONE supervisor (default run) or after
 TRIPWIRE (kill run). We just wait for Firecracker to exit.
 """
-import argparse, http.client, importlib.util, json, os, shutil, signal, socket, stat, subprocess, sys, tempfile, threading, time
+import argparse, http.client, importlib.util, json, os, re, shutil, signal, socket, stat, struct, subprocess, sys, tempfile, threading, time
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _spec = importlib.util.spec_from_file_location(
@@ -26,15 +26,22 @@ def wait_for_socket(path, timeout=5.0):
     raise RuntimeError(f"API socket {path} did not appear within {timeout}s")
 
 class UnixHTTPConnection(http.client.HTTPConnection):
-    def __init__(self, socket_path, timeout=5.0):
+    def __init__(self, socket_path, timeout=5.0, peer_pid=None):
         super().__init__("localhost", timeout=timeout)
         self.socket_path = socket_path
+        self.peer_pid = peer_pid
     def connect(self):
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(self.timeout); s.connect(self.socket_path); self.sock = s
+        s.settimeout(self.timeout); s.connect(self.socket_path)
+        if self.peer_pid is not None:   # GEN-09: only talk to the VMM we launched
+            pid, _, _ = struct.unpack("3i", s.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+            if pid != self.peer_pid:
+                s.close()
+                raise RuntimeError(f"API socket is served by pid {pid}, expected {self.peer_pid}")
+        self.sock = s
 
-def api_put(sock_path, path, body):
-    conn = UnixHTTPConnection(sock_path)
+def api_put(sock_path, path, body, peer_pid=None):
+    conn = UnixHTTPConnection(sock_path, peer_pid=peer_pid)
     try:
         payload = json.dumps(body).encode()
         conn.request("PUT", path, body=payload, headers={"Content-Type": "application/json"})
@@ -45,8 +52,8 @@ def api_put(sock_path, path, body):
     finally:
         conn.close()
 
-def api_get(sock_path, path):
-    conn = UnixHTTPConnection(sock_path)
+def api_get(sock_path, path, peer_pid=None):
+    conn = UnixHTTPConnection(sock_path, peer_pid=peer_pid)
     try:
         conn.request("GET", path)
         resp = conn.getresponse(); data = resp.read()
@@ -56,10 +63,10 @@ def api_get(sock_path, path):
     finally:
         conn.close()
 
-def assert_no_network(sock_path):
+def assert_no_network(sock_path, peer_pid=None):
     """EXT-01: the no-NIC property must be enforced, not assumed. Abort before
     InstanceStart if the VM config carries any network interface or MMDS."""
-    cfg = api_get(sock_path, "/vm/config")
+    cfg = api_get(sock_path, "/vm/config", peer_pid=peer_pid)
     nics = cfg.get("network-interfaces") or []
     if nics:
         raise RuntimeError(f"REFUSING TO START: {len(nics)} network interface(s) configured "
@@ -78,8 +85,11 @@ def bind_listener(listen_path, owner=None):
     sock.listen(8); sock.settimeout(1.0)
     return sock
 
+MAX_LINES_PER_RUN = 4096   # GEN-10: a run that exceeds this has its receipts refused
+
 def run_vsock_listener(sock, listen_path, events_path, receipt_db, ready_event, stop_event):
     ready_event.set()
+    lines = 0
     try:
         while not stop_event.is_set():
             try:
@@ -102,12 +112,20 @@ def run_vsock_listener(sock, listen_path, events_path, receipt_db, ready_event, 
                     pass
                 if not buf:
                     continue
-                if truncated and b"\n" not in buf:
-                    # F3: a line exceeding the cap with no newline must NOT be
-                    # committed as if it were a whole line — that records a lie.
-                    # Record the truncation as its own event and refuse to ack;
-                    # the guest's send_and_ack fails closed on a missing ack.
-                    marker = f"TRUNCATION vsock line exceeded 16384 bytes dropped={len(buf)}"
+                lines += 1
+                if lines > MAX_LINES_PER_RUN:
+                    if lines == MAX_LINES_PER_RUN + 1:
+                        try:
+                            receipt.append_run_event(receipt_db, "vsock", "TRUNCATION line limit reached")
+                        except Exception as e:
+                            print(f"supervisor: RECEIPT WRITE FAILED: {e}", file=sys.stderr)
+                    continue  # no ack: the guest fails closed
+                if b"\n" not in buf:
+                    # GEN-05/F3: anything without a newline (over the cap, timed out, or
+                    # cut off) must NOT be committed as if it were a whole line. Record
+                    # it as its own event and refuse to ack; the guest fails closed.
+                    reason = "exceeded 16384 bytes" if truncated else "incomplete"
+                    marker = f"TRUNCATION vsock line {reason} dropped={len(buf)}"
                     with open(events_path, "ab") as f:
                         f.write(marker.encode() + b"\n")
                     try:
@@ -135,12 +153,19 @@ def run_vsock_listener(sock, listen_path, events_path, receipt_db, ready_event, 
         try: os.unlink(listen_path)
         except OSError: pass   # in jail mode the jail teardown removes it
 
+def printable(text):
+    """GEN-16: guest-controlled bytes must not reach the operator's terminal as controls."""
+    return re.sub(r"[^\x20-\x7e\t]", "?", text)
+
 def dump_serial_tail(serial_path, n=40):
     try:
-        data = open(serial_path, "rb").read()
+        with open(serial_path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - 65536))   # never load an unbounded guest-written file
+            data = f.read()
         print("--- serial log tail ---", file=sys.stderr)
         for line in data.split(b"\n")[-n:]:
-            print(line.decode("utf-8", "replace").rstrip("\r"), file=sys.stderr)
+            print(printable(line.decode("utf-8", "replace").rstrip("\r")), file=sys.stderr)
         print("--- end serial log tail ---", file=sys.stderr)
     except Exception as e:
         print(f"(failed to read serial log: {e})", file=sys.stderr)
@@ -203,6 +228,17 @@ def drop_privileges(uid, gid):
     if os.geteuid() != uid or os.getegid() != gid:
         raise RuntimeError("failed to drop privileges")
 
+def read_vm_pid(pid_file):
+    """GEN-09: the jailer writes this as root. A file the jail uid planted is rejected."""
+    fd = os.open(pid_file, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != 0:
+            raise RuntimeError("pid file was not written by the jailer")
+        return int(os.read(fd, 32).strip())
+    finally:
+        os.close(fd)
+
 def vm_alive(pid):
     try:
         with open(f"/proc/{pid}/stat") as f:
@@ -237,18 +273,25 @@ def run_vmm(args, boot_args, argv, api_sock, kernel, rootfs, uds_path, pid_file=
     try:
         proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL,
                                 stdout=serial_f, stderr=subprocess.STDOUT)
+        if pid_file is not None:
+            # With --new-pid-ns the jailer parent exits once it has recorded the VMM's pid.
+            parent_rc = proc.wait(timeout=5)
+            if parent_rc != 0:
+                raise RuntimeError(f"jailer exited {parent_rc}")
+            vm_pid = read_vm_pid(pid_file)
+            check_confined(vm_pid, args.jail_uid)
         wait_for_socket(api_sock)
-        api_put(api_sock, "/boot-source", {"kernel_image_path": kernel, "boot_args": boot_args})
+        api_put(api_sock, "/boot-source", {"kernel_image_path": kernel, "boot_args": boot_args}, vm_pid)
         api_put(api_sock, "/drives/rootfs", {
             "drive_id": "rootfs", "path_on_host": rootfs,
-            "is_root_device": True, "is_read_only": True})
+            "is_root_device": True, "is_read_only": True}, vm_pid)
         api_put(api_sock, "/machine-config", {
-            "vcpu_count": 1, "mem_size_mib": 256, "smt": False})
-        api_put(api_sock, "/vsock", {"guest_cid": 3, "uds_path": uds_path})
+            "vcpu_count": 1, "mem_size_mib": 256, "smt": False}, vm_pid)
+        api_put(api_sock, "/vsock", {"guest_cid": 3, "uds_path": uds_path}, vm_pid)
         if after_vsock is not None:
             after_vsock()
-        assert_no_network(api_sock)
-        api_put(api_sock, "/actions", {"action_type": "InstanceStart"})
+        assert_no_network(api_sock, vm_pid)
+        api_put(api_sock, "/actions", {"action_type": "InstanceStart"}, vm_pid)
         if pid_file is None:
             deadline = time.time() + args.run_timeout
             while proc.poll() is None and time.time() < deadline and not stopped():
@@ -268,13 +311,6 @@ def run_vmm(args, boot_args, argv, api_sock, kernel, rootfs, uds_path, pid_file=
                     proc.kill(); proc.wait()
                 rc = 124
         else:
-            # With --new-pid-ns the jailer parent exits and records the VMM's pid.
-            parent_rc = proc.wait(timeout=5)
-            if parent_rc != 0:
-                raise RuntimeError(f"jailer exited {parent_rc}")
-            with open(pid_file) as f:
-                vm_pid = int(f.read().strip())
-            check_confined(vm_pid, args.jail_uid)
             deadline = time.time() + args.run_timeout
             while vm_alive(vm_pid) and time.time() < deadline and not stopped():
                 time.sleep(0.02)
@@ -301,8 +337,10 @@ def finish(args, listener_thread, stop_event, rc):
     try:
         ok, msg = receipt.verify(args.receipt_db)
         print(f"supervisor: receipt {msg} ({'OK' if ok else 'BROKEN'})", file=sys.stderr)
+        return ok   # GEN-22: a broken chain must fail the run
     except Exception as e:
         print(f"supervisor: receipt check failed: {e}", file=sys.stderr)
+        return False
 
 def start_listener(args, sock, listen_path, stop_event):
     ready_event = threading.Event()
@@ -348,8 +386,8 @@ def main_jailed(args, boot_args):
     listener_thread = start_listener(args, sock, listen_path, stop_event)
     _, status = os.waitpid(child, 0)
     rc = os.waitstatus_to_exitcode(status)
-    finish(args, listener_thread, stop_event, rc)
-    return 0 if rc == 0 else 1
+    ok = finish(args, listener_thread, stop_event, rc)
+    return 0 if rc == 0 and ok else 1
 
 def main():
     ap = argparse.ArgumentParser()
@@ -382,8 +420,8 @@ def main():
         listener_thread = start_listener(args, bind_listener(uds_listen), uds_listen, stop_event)
         rc = run_vmm(args, boot_args, [args.firecracker, "--api-sock", api_sock],
                      api_sock, args.kernel, args.rootfs, uds_prefix)
-        finish(args, listener_thread, stop_event, rc)
-        return 0 if rc == 0 else 1   # a timeout or VMM failure must not look like success
+        ok = finish(args, listener_thread, stop_event, rc)
+        return 0 if rc == 0 and ok else 1   # a timeout, VMM failure or bad chain must not pass
 
 if __name__ == "__main__":
     sys.exit(main())

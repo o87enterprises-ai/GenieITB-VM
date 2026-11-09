@@ -83,6 +83,9 @@ scripts/config --file .config \
   --disable CONFIG_UEVENT_HELPER --disable CONFIG_IA32_EMULATION \
   --disable CONFIG_NETFILTER --disable CONFIG_PACKET --disable CONFIG_VIRTIO_NET \
   --disable CONFIG_INET \
+  --disable CONFIG_PROC_KCORE --disable CONFIG_X86_MSR --disable CONFIG_X86_CPUID \
+  --disable CONFIG_LEGACY_VSYSCALL_XONLY --disable CONFIG_LEGACY_VSYSCALL_EMULATE \
+  --enable  CONFIG_LEGACY_VSYSCALL_NONE \
   --disable CONFIG_DEBUG_INFO \
   --disable CONFIG_DEBUG_INFO_BTF \
   --disable CONFIG_KASAN \

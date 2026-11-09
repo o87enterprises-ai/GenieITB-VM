@@ -67,7 +67,7 @@ def cmd_verify(db, label):
     except OSError as e: fail(f"cannot read anchor log: {e}", 2)
     for l in lines:
         try: a = json.loads(l)
-        except ValueError: continue
+        except ValueError: fail("anchor log has a malformed line (tampered anchor log)")
         if a.get("label") != label: continue
         if not hmac.compare_digest(a.get("mac", ""), mac(key, label, a["rows"], a["head"], a["at"])):
             fail(f"anchor for {label} at {a['at']} has a bad MAC (tampered anchor log)")

@@ -92,14 +92,27 @@ def verify(db_path):
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
         prev, n = CHAIN_GENESIS, 0
+        seen = set()
         for kind, ref_seq, payload, stored_prev, stored_hash in conn.execute(
                 "SELECT kind, ref_seq, payload, prev, hash FROM chain ORDER BY n"):
             if stored_prev != prev:
                 return False, f"chain[{n}] prev mismatch"
             if chain_hash(prev, kind, payload) != stored_hash:
                 return False, f"chain[{n}] hash mismatch"
+            if kind == "run_event":
+                # GEN-11: the readable table must match what the chain recorded.
+                row = conn.execute("SELECT kind, detail, at FROM run_events WHERE seq = ?",
+                                   (ref_seq,)).fetchone()
+                if row is None or ref_seq in seen:
+                    return False, f"chain[{n}] refers to a missing or repeated run_event"
+                if json.dumps(list(row), separators=(",", ":"), ensure_ascii=False) != payload:
+                    return False, f"run_events row {ref_seq} differs from chain[{n}]"
+                seen.add(ref_seq)
             prev = stored_hash
             n += 1
+        total = conn.execute("SELECT COUNT(*) FROM run_events").fetchone()[0]
+        if total != len(seen):
+            return False, f"{total - len(seen)} run_events row(s) are not in the chain"
         return True, f"{n} entries, head {prev}"
     finally:
         conn.close()

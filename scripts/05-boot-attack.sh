@@ -24,6 +24,13 @@ done
 # EXT-05: refuse to run with unpinned/modified VMM binaries.
 "$ROOT/scripts/verify-inputs.sh" --installed || { echo "input verification failed" >&2; exit 2; }
 "$ROOT/scripts/verify-inputs.sh" broker "$BROKER" || { echo "broker does not match inputs.lock" >&2; exit 2; }
+# GEN-13: the exact kernel and rootfs that will boot are verified here, at point of use.
+if [[ "$KERNEL" == "$ROOT/kernel/vmlinux.bin" ]]; then
+  "$ROOT/scripts/verify-inputs.sh" kernel/vmlinux.bin "$KERNEL" || { echo "kernel does not match inputs.lock" >&2; exit 2; }
+else echo "WARN: KERNEL override is not checked against inputs.lock" >&2; fi
+if [[ "$ROOTFS" == "$ROOT/rootfs/05-rootfs-minimal.ext4" ]]; then
+  "$ROOT/scripts/verify-inputs.sh" rootfs/05-rootfs-minimal.ext4 "$ROOTFS" || { echo "rootfs does not match inputs.lock; rebuild it with build-minimal-rootfs.sh" >&2; exit 2; }
+else echo "WARN: ROOTFS override is not checked against inputs.lock" >&2; fi
 [[ -n "${JAIL_USER:-}" ]] || echo "WARN: running WITHOUT the jailer (set JAIL_USER=<account> to confine the VMM)" >&2
 
 # EXT-04: archive the previous receipt instead of destroying evidence.
@@ -145,7 +152,8 @@ fi
 
 echo
 echo "==> vsock lines, in order:"
-sed 's/^/   /' "$EVENTS"
+# GEN-16: these bytes came from the guest, so controls are not sent to the terminal.
+LC_ALL=C sed -e 's/[^[:print:]\t]/?/g' -e 's/^/   /' "$EVENTS"
 echo
 if [[ "$fail" -eq 0 ]]; then
   echo "==> Phase 5 SS1 ($MODE) PASS"

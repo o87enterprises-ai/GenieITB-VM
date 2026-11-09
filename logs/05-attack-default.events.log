@@ -1,12 +1,12 @@
-LSM capability,landlock
+LSM capability,landlock,lockdown,yama
 HELLO supervisor
-HELLO shell_agent
 HELLO doc_agent
-TRY shell_agent execve /tmp/payload.sh
+HELLO shell_agent
 ALLOW doc_agent write /tmp/doc/benign.txt
-DENY shell_agent execve /tmp/payload.sh errno=13
+TRY shell_agent execve /tmp/payload.sh
 DENY doc_agent write /tmp/payload.sh errno=13
-TRY shell_agent execve /bin/true
+DENY shell_agent execve /tmp/payload.sh errno=13
 DENY doc_agent execve /tmp/payload.sh EACCES
+TRY shell_agent execve /bin/true
 DONE doc_agent
 DONE supervisor

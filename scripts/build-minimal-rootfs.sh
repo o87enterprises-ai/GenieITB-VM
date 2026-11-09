@@ -28,3 +28,10 @@ rm -f "$OUT"
 fakeroot -- bash -c "chown -R 0:0 '$T' && mke2fs -q -t ext4 -m 0 -L genie-min -d '$T' '$OUT' 16M"
 e2fsck -fn "$OUT" >/dev/null
 sha256sum "$OUT"
+if [[ "$OUT" == "$ROOT/rootfs/05-rootfs-minimal.ext4" ]]; then
+  # The image is not byte-reproducible, so pin each build. Detects a later swap.
+  H="$(sha256sum "$OUT" | cut -d' ' -f1)"
+  grep -v '  rootfs/05-rootfs-minimal.ext4  -$' "$ROOT/inputs.lock" > "$WORK/lock"
+  echo "$H  rootfs/05-rootfs-minimal.ext4  -" >> "$WORK/lock"
+  cat "$WORK/lock" > "$ROOT/inputs.lock"
+fi

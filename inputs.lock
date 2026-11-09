@@ -9,10 +9,12 @@
 # Kernel source (hash matches kernel.org sha256sums.asc; autosigner PGP signature checked 2026-11-08)
 2818053c07976ba4ed5f44deb0f5dc7ae7b0975d7918c313d48d8fe7c4e598cb  linux-6.1.167.tar.xz  https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.1.167.tar.xz
 # Vendored hardened guest config. Change deliberately and update this hash in the same review.
-3f707b8b2491908df9c015cb0563211a9248c8547ce627b7ba8b88248cecb428  config/guest-kernel-6.1.config  -
+3cacc9e5371de69304a8162ddd0f5a144d775a2dbe765541be170591c7ee24b6  config/guest-kernel-6.1.config  -
 # Firecracker quickstart reference artifacts (Phase 0/1 only; fresh downloads matched local copies)
 ea5e7d5cf494a8c4ba043259812fc018b44880d70bcbbfc4d57d2760631b1cd6  reference-vmlinux.bin  https://s3.amazonaws.com/spec.ccfc.min/img/quickstart_guide/x86_64/kernels/vmlinux.bin
 2a840feeccb5cb161c6eab1ecd86667c06ed5e307da534d2d3c9e39a6ec6c30a  reference-rootfs.ext4  https://s3.amazonaws.com/spec.ccfc.min/img/quickstart_guide/x86_64/rootfs/bionic.rootfs.ext4
 # Pinned as found on 2026-11-08 so changes are detected. Provenance not independently established.
 1ced8ad348c896bb0cc78d76ea336e41b1310c6d4fcb2ddcdd8217d964b409c4  guest-agent/agent  -
 afdd378cb008c18544bef0153800ceec9d711a1f4256f53e7c61839f022a5368  broker  -
+edaec9081d5d111f63c52f339a54e6be1157425e561c3ab7ca09df3238f26490  kernel/vmlinux.bin  -
+d8cedb982b3285225de03a64b3c7415fc2b44942f9301dcbcd9ed2569089f632  rootfs/05-rootfs-minimal.ext4  -
